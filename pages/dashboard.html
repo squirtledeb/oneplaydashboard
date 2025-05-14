@@ -517,10 +517,14 @@
         .upload-container {
             background-color: #1c1c2e;
             border-radius: 8px;
-            padding: 30px;
+            padding: 40px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             margin-bottom: 30px;
+        }
+        
+        .upload-container.dark {
+            background-color: #13141e;
         }
         
         .upload-icon {
@@ -531,34 +535,54 @@
             text-align: center;
         }
         
-        .upload-text {
+        .upload-content {
             flex: 1;
         }
         
-        .upload-text h3 {
-            margin-bottom: 5px;
-            font-size: 16px;
+        .upload-content h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: 500;
         }
         
-        .upload-text p {
+        .upload-content p {
             color: #a0a0c0;
-            font-size: 14px;
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 15px;
         }
         
-        .upload-action-btn {
+        .upload-btn-inline, .connect-discord-btn, .create-btn {
             background-color: #4b83e2;
             color: white;
             border: none;
             border-radius: 4px;
-            padding: 8px 15px;
+            padding: 8px 16px;
             font-size: 14px;
             cursor: pointer;
-            display: flex;
+            display: inline-flex;
             align-items: center;
+            margin-top: 5px;
         }
         
-        .upload-action-btn i {
-            margin-right: 5px;
+        .upload-btn-inline i, .connect-discord-btn i, .create-btn i {
+            margin-right: 8px;
+        }
+        
+        .connect-discord-btn {
+            background-color: #5865F2;
+        }
+        
+        .connect-discord-btn:hover {
+            background-color: #4752c4;
+        }
+        
+        .create-btn {
+            background-color: #4b83e2;
+        }
+        
+        .create-btn:hover {
+            background-color: #3a72d1;
         }
         
         .source-table {
@@ -1239,71 +1263,50 @@
                 
                 <!-- Upload Sources Page -->
                 <div class="settings-page" id="upload-sources-page">
-                    <div class="settings-page-header">
-                        <h1>AI Knowledge Base</h1>
-                        <p>Upload new sources to Mava AI and manage which Discord roles Mava AI learns from</p>
-                        <a href="#" class="read-more">Read more <i class="fas fa-chevron-right"></i></a>
-                    </div>
-                    
                     <div class="settings-page-section">
-                        <div class="header-with-button">
-                            <h2>Your knowledge sources</h2>
-                            <button class="upload-btn">Upload content</button>
-                        </div>
-                        <p class="section-description">Add any website, Github, PDF or create a custom text block.</p>
+                        <h2>Your knowledge sources</h2>
+                        <p class="section-description">Add any website, Gitbook, PDF or create a custom text block.</p>
                         
-                        <div class="upload-container">
+                        <div class="upload-container dark">
                             <div class="upload-icon">
                                 <i class="fas fa-cloud-upload-alt"></i>
                             </div>
-                            <div class="upload-text">
+                            <div class="upload-content">
                                 <h3>Upload your content</h3>
-                                <p>Add any website, Github, PDF or create a custom text block.</p>
+                                <p>Add any website, Gitbook, PDF or create a custom text block.</p>
+                                <button class="upload-btn-inline"><i class="fas fa-plus"></i> Upload</button>
                             </div>
-                            <button class="upload-action-btn"><i class="fas fa-plus"></i> Upload</button>
                         </div>
                     </div>
                     
                     <div class="settings-page-section">
-                        <div class="header-with-badge">
-                            <h2>Auto training from community channels</h2>
-                            <span class="premium-badge">Premium</span>
-                        </div>
+                        <h2>Auto training from community channels</h2>
                         <p class="section-description">Mava AI will learn from every Discord reply your team makes.</p>
                         
-                        <div class="source-table">
-                            <div class="source-table-header">
-                                <div class="source-column">Source</div>
-                                <div class="status-column">Status</div>
-                                <div class="action-column"></div>
+                        <div class="upload-container dark">
+                            <div class="upload-icon">
+                                <i class="fas fa-project-diagram"></i>
                             </div>
-                            <div class="source-table-row">
-                                <div class="source-column">
-                                    <div class="source-icon discord"><i class="fab fa-discord"></i></div>
-                                    <div class="source-name">Test</div>
-                                </div>
-                                <div class="status-column disabled">Disabled</div>
-                                <div class="action-column">
-                                    <button class="activate-btn">Activate</button>
-                                </div>
+                            <div class="upload-content">
+                                <h3>Link social channels & forums</h3>
+                                <p>Never answer the same question twice, by allowing Mava to learn from your Discord, Telegram replies</p>
+                                <button class="connect-discord-btn"><i class="fab fa-discord"></i> Connect discord</button>
                             </div>
                         </div>
                     </div>
                     
                     <div class="settings-page-section">
-                        <div class="header-with-badge">
-                            <h2>Your scripted replies</h2>
-                            <span class="premium-badge">Premium</span>
-                        </div>
+                        <h2>Your scripted replies</h2>
                         <p class="section-description">Pre-defined replies for consistent and very fast responses to certain questions. Only works with Public AI.</p>
                         
-                        <div class="scripted-reply-container">
-                            <div class="reply-icon">
-                                <i class="fas fa-comment-dots"></i>
+                        <div class="upload-container dark">
+                            <div class="upload-icon">
+                                <i class="fas fa-reply"></i>
                             </div>
-                            <div class="reply-content">
+                            <div class="upload-content">
                                 <h3>Create scripted reply</h3>
                                 <p>Write a custom reply that Mava AI should respond with every time it gets a certain question. Mava AI will analyze user questions and identify matches, even if they are not worded exactly the same.</p>
+                                <button class="create-btn"><i class="fas fa-plus"></i> Create</button>
                             </div>
                         </div>
                     </div>
@@ -1311,20 +1314,7 @@
                 
                 <!-- View & Edit Content Page -->
                 <div class="settings-page" id="view-edit-content-page">
-                    <div class="settings-page-header">
-                        <h1>View & Edit Content</h1>
-                        <p>Manage your AI content and edit existing materials</p>
-                    </div>
-                    
-                    <div class="settings-page-section">
-                        <div class="placeholder-content">
-                            <div class="placeholder-icon">
-                                <i class="fas fa-edit"></i>
-                            </div>
-                            <h3>Content Editor</h3>
-                            <p>Your content management interface will appear here</p>
-                        </div>
-                    </div>
+                    <!-- Empty page as requested -->
                 </div>
                 
                 <!-- We've completely removed the old AI Knowledge Base page as we've repurposed it -->
@@ -1725,13 +1715,29 @@
             });
             
             // Set up the upload content buttons
-            const uploadButtons = document.querySelectorAll('.upload-btn, .upload-action-btn');
+            const uploadButtons = document.querySelectorAll('.upload-btn, .upload-action-btn, .upload-btn-inline');
             uploadButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     // Show website URL modal
                     showWebsiteUrlModal();
                 });
-            }); 
+            });
+            
+            // Connect Discord button
+            const connectDiscordBtn = document.querySelector('.connect-discord-btn');
+            if (connectDiscordBtn) {
+                connectDiscordBtn.addEventListener('click', function() {
+                    window.open('https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=8', '_blank');
+                });
+            }
+            
+            // Create scripted reply button
+            const createBtn = document.querySelector('.create-btn');
+            if (createBtn) {
+                createBtn.addEventListener('click', function() {
+                    alert('This would open the scripted reply creation dialog.');
+                });
+            } 
             
             // Website URL modal functionality
             function showWebsiteUrlModal() {
