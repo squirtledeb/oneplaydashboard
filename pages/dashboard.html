@@ -177,6 +177,70 @@
             margin-bottom: 20px;
         }
         
+        /* Settings Styles */
+        .hidden {
+            display: none;
+        }
+        
+        .settings-container {
+            padding: 0 20px;
+        }
+        
+        .settings-section {
+            margin-bottom: 30px;
+        }
+        
+        .settings-category {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+        
+        .settings-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .settings-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .settings-item.active {
+            background-color: #252545;
+        }
+        
+        .settings-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            color: #a0a0c0;
+        }
+        
+        .settings-label {
+            flex: 1;
+            font-size: 16px;
+            color: #ffffff;
+        }
+        
+        .dropdown-indicator {
+            color: #a0a0c0;
+        }
+        
+        .settings-divider {
+            height: 1px;
+            background-color: #2e2e44;
+            margin: 25px 0;
+        }
+        
         .logout-btn {
             padding: 8px 16px;
             border-radius: 4px;
@@ -282,32 +346,122 @@
     </div>
     
     <div class="main-content" id="main-content">
-        <div class="main-header">
-            <div class="search-bar">
-                <i class="fas fa-search"></i>
-                <input type="text" placeholder="Search...">
+        <!-- Default Dashboard Content -->
+        <div class="dashboard-view" id="dashboard-view">
+            <div class="main-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" placeholder="Search...">
+                </div>
+                <button class="logout-btn">Logout</button>
             </div>
-            <button class="logout-btn">Logout</button>
+            
+            <div class="content-section">
+                <h2>Gaming Dashboard</h2>
+                <p>Welcome to your OnePlay Cloud Gaming dashboard. Here you can manage your games and track your gaming activity.</p>
+            </div>
+            
+            <div class="content-section">
+                <h2>Recent Games</h2>
+                <p>Your recently played games will appear here.</p>
+            </div>
+            
+            <div class="content-section">
+                <h2>Gaming Stats</h2>
+                <p>Your gameplay statistics will appear here.</p>
+            </div>
+            
+            <div class="content-section">
+                <h2>Subscription Details</h2>
+                <p>Your subscription information will appear here.</p>
+            </div>
         </div>
         
-        <div class="content-section">
-            <h2>Gaming Dashboard</h2>
-            <p>Welcome to your OnePlay Cloud Gaming dashboard. Here you can manage your games and track your gaming activity.</p>
-        </div>
-        
-        <div class="content-section">
-            <h2>Recent Games</h2>
-            <p>Your recently played games will appear here.</p>
-        </div>
-        
-        <div class="content-section">
-            <h2>Gaming Stats</h2>
-            <p>Your gameplay statistics will appear here.</p>
-        </div>
-        
-        <div class="content-section">
-            <h2>Subscription Details</h2>
-            <p>Your subscription information will appear here.</p>
+        <!-- Settings View -->
+        <div class="settings-view hidden" id="settings-view">
+            <div class="main-header">
+                <h1>Settings</h1>
+            </div>
+            
+            <div class="settings-container">
+                <div class="settings-section">
+                    <h2 class="settings-category">Account</h2>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-user"></i></div>
+                        <div class="settings-label">Profile</div>
+                    </div>
+                    
+                    <div class="settings-item active">
+                        <div class="settings-icon"><i class="fas fa-bell"></i></div>
+                        <div class="settings-label">Personal Notifications</div>
+                    </div>
+                </div>
+                
+                <div class="settings-divider"></div>
+                
+                <div class="settings-section">
+                    <h2 class="settings-category">Workspace</h2>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-cog"></i></div>
+                        <div class="settings-label">General</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-plug"></i></div>
+                        <div class="settings-label">Integrations</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-users"></i></div>
+                        <div class="settings-label">Manage Team</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-bell"></i></div>
+                        <div class="settings-label">Team Notifications</div>
+                    </div>
+                    
+                    <div class="settings-item with-dropdown">
+                        <div class="settings-icon"><i class="fas fa-robot"></i></div>
+                        <div class="settings-label">AI</div>
+                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                    </div>
+                    
+                    <div class="settings-item with-dropdown">
+                        <div class="settings-icon"><i class="fas fa-magic"></i></div>
+                        <div class="settings-label">Automations</div>
+                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-th-large"></i></div>
+                        <div class="settings-label">Categories</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-tags"></i></div>
+                        <div class="settings-label">Tags</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-clipboard-list"></i></div>
+                        <div class="settings-label">Ticket & User Attributes</div>
+                    </div>
+                    
+                    <div class="settings-item">
+                        <div class="settings-icon"><i class="fas fa-ticket-alt"></i></div>
+                        <div class="settings-label">Ticket Settings</div>
+                    </div>
+                    
+                    <div class="settings-item with-dropdown">
+                        <div class="settings-icon"><i class="fas fa-code"></i></div>
+                        <div class="settings-label">API & Webhooks</div>
+                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -367,11 +521,23 @@
                     // Add active class to clicked icon
                     this.classList.add('sidebar-icon-primary');
                     
-                    // If it's the chat icon (first icon)
-                    if (index === 0) {
+                    // Get view elements
+                    const dashboardView = document.getElementById('dashboard-view');
+                    const settingsView = document.getElementById('settings-view');
+                    
+                    // Handle different icon clicks
+                    if (index === 0) { // Chat icon
                         sidebar.classList.remove('hidden');
-                    } else {
+                        dashboardView.classList.remove('hidden');
+                        settingsView.classList.add('hidden');
+                    } else if (index === 2) { // Settings icon (3rd position, index 2)
                         sidebar.classList.add('hidden');
+                        dashboardView.classList.add('hidden');
+                        settingsView.classList.remove('hidden');
+                    } else { // Other icons
+                        sidebar.classList.add('hidden');
+                        dashboardView.classList.remove('hidden');
+                        settingsView.classList.add('hidden');
                     }
                     
                     updateMainContentMargin();
@@ -451,6 +617,29 @@
                 sessionStorage.removeItem('loggedInUser');
                 // Redirect to login page
                 window.location.href = '../index.html';
+            });
+            
+            // Handle settings items click
+            const settingsItems = document.querySelectorAll('.settings-item');
+            settingsItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    // Remove active class from all items
+                    settingsItems.forEach(i => i.classList.remove('active'));
+                    // Add active class to clicked item
+                    this.classList.add('active');
+                    
+                    // Handle dropdown toggle if it has a dropdown
+                    if (this.classList.contains('with-dropdown')) {
+                        const icon = this.querySelector('.dropdown-indicator i');
+                        if (icon.classList.contains('fa-chevron-down')) {
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-up');
+                        } else {
+                            icon.classList.remove('fa-chevron-up');
+                            icon.classList.add('fa-chevron-down');
+                        }
+                    }
+                });
             });
         });
     </script>
