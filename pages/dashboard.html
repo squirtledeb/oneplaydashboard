@@ -182,27 +182,61 @@
             display: none;
         }
         
-        .settings-container {
-            padding: 0 20px;
+        /* Settings Layout */
+        .settings-view {
+            display: flex;
+            height: 100vh;
+            width: 100%;
+        }
+        
+        .settings-column {
+            width: 220px;
+            background-color: #13131f;
+            border-right: 1px solid #252545;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        
+        .settings-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: white;
+            padding: 20px;
+            border-bottom: 1px solid #252545;
+        }
+        
+        .settings-menu-container {
+            padding: 15px 0;
+        }
+        
+        .settings-content {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #0e0e18;
+            height: 100vh;
         }
         
         .settings-section {
             margin-bottom: 30px;
+            padding: 0 15px;
         }
         
         .settings-category {
-            font-size: 18px;
-            font-weight: 500;
-            margin-bottom: 15px;
-            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 15px 0 10px 0;
+            color: #a0a0c0;
+            text-transform: uppercase;
+            padding: 0 5px;
         }
         
         .settings-item {
             display: flex;
             align-items: center;
-            padding: 12px 15px;
-            margin-bottom: 5px;
-            border-radius: 8px;
+            padding: 8px 10px;
+            margin-bottom: 2px;
+            border-radius: 4px;
             cursor: pointer;
             transition: background-color 0.2s;
         }
@@ -216,18 +250,18 @@
         }
         
         .settings-icon {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-right: 15px;
+            margin-right: 10px;
             color: #a0a0c0;
         }
         
         .settings-label {
             flex: 1;
-            font-size: 16px;
+            font-size: 14px;
             color: #ffffff;
         }
         
@@ -235,10 +269,177 @@
             color: #a0a0c0;
         }
         
-        .settings-divider {
-            height: 1px;
-            background-color: #2e2e44;
-            margin: 25px 0;
+        /* Integrations Page Styles */
+        .settings-page {
+            display: none;
+            padding: 30px;
+        }
+        
+        .settings-page.active {
+            display: block;
+        }
+        
+        .settings-page-header {
+            margin-bottom: 30px;
+        }
+        
+        .settings-page-header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .settings-page-header p {
+            color: #a0a0c0;
+            margin-bottom: 10px;
+        }
+        
+        .settings-page-header .read-more {
+            color: #4b83e2;
+            text-decoration: none;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+        }
+        
+        .settings-page-header .read-more i {
+            font-size: 12px;
+            margin-left: 5px;
+        }
+        
+        .settings-page-section {
+            margin-bottom: 40px;
+        }
+        
+        .settings-page-section h2 {
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+        
+        .integrations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .integration-card {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .integration-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .integration-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 20px;
+        }
+        
+        .integration-icon.discord {
+            background-color: #5865F2;
+            color: white;
+        }
+        
+        .integration-icon.email {
+            background-color: #4285F4;
+            color: white;
+        }
+        
+        .integration-icon.webchat {
+            background-color: #36B37E;
+            color: white;
+        }
+        
+        .integration-name {
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .integration-description {
+            color: #a0a0c0;
+            font-size: 14px;
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+        
+        .integration-status {
+            color: #a0a0c0;
+            font-size: 14px;
+            margin-bottom: 20px;
+            flex-grow: 1;
+        }
+        
+        .integration-action {
+            margin-top: auto;
+        }
+        
+        .connect-btn {
+            background-color: #4b83e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .connect-btn i {
+            margin-right: 5px;
+        }
+        
+        .connect-btn:hover {
+            background-color: #396bc7;
+        }
+        
+        .integration-actions-row {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .view-edit-btn {
+            background-color: transparent;
+            border: 1px solid #4b83e2;
+            color: #4b83e2;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            flex: 1;
+            justify-content: center;
+        }
+        
+        .view-edit-btn i {
+            margin-right: 5px;
+        }
+        
+        .disconnect-btn {
+            background-color: transparent;
+            border: 1px solid #a0a0c0;
+            color: #a0a0c0;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            flex: 1;
         }
         
         .logout-btn {
@@ -379,86 +580,156 @@
         
         <!-- Settings View -->
         <div class="settings-view hidden" id="settings-view">
-            <div class="main-header">
-                <h1>Settings</h1>
-            </div>
-            
-            <div class="settings-container">
-                <div class="settings-section">
-                    <h2 class="settings-category">Account</h2>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-user"></i></div>
-                        <div class="settings-label">Profile</div>
+            <div class="settings-column" id="settings-menu">
+                <div class="settings-title">Settings</div>
+                
+                <div class="settings-menu-container">
+                    <div class="settings-section">
+                        <div class="settings-category">Account</div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-user"></i></div>
+                            <div class="settings-label">Profile</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-bell"></i></div>
+                            <div class="settings-label">Personal Notifications</div>
+                        </div>
                     </div>
                     
-                    <div class="settings-item active">
-                        <div class="settings-icon"><i class="fas fa-bell"></i></div>
-                        <div class="settings-label">Personal Notifications</div>
+                    <div class="settings-section">
+                        <div class="settings-category">Workspace</div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-cog"></i></div>
+                            <div class="settings-label">General</div>
+                        </div>
+                        
+                        <div class="settings-item active" data-page="integrations">
+                            <div class="settings-icon"><i class="fas fa-plug"></i></div>
+                            <div class="settings-label">Integrations</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-users"></i></div>
+                            <div class="settings-label">Manage Team</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-bell"></i></div>
+                            <div class="settings-label">Team Notifications</div>
+                        </div>
+                        
+                        <div class="settings-item with-dropdown">
+                            <div class="settings-icon"><i class="fas fa-robot"></i></div>
+                            <div class="settings-label">AI</div>
+                            <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                        </div>
+                        
+                        <div class="settings-item with-dropdown">
+                            <div class="settings-icon"><i class="fas fa-magic"></i></div>
+                            <div class="settings-label">Automations</div>
+                            <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-th-large"></i></div>
+                            <div class="settings-label">Categories</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-tags"></i></div>
+                            <div class="settings-label">Tags</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-clipboard-list"></i></div>
+                            <div class="settings-label">Ticket & User Attributes</div>
+                        </div>
+                        
+                        <div class="settings-item">
+                            <div class="settings-icon"><i class="fas fa-ticket-alt"></i></div>
+                            <div class="settings-label">Ticket Settings</div>
+                        </div>
+                        
+                        <div class="settings-item with-dropdown">
+                            <div class="settings-icon"><i class="fas fa-code"></i></div>
+                            <div class="settings-label">API & Webhooks</div>
+                            <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="settings-divider"></div>
-                
-                <div class="settings-section">
-                    <h2 class="settings-category">Workspace</h2>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-cog"></i></div>
-                        <div class="settings-label">General</div>
+            </div>
+            
+            <div class="settings-content" id="settings-content">
+                <!-- Integrations Page -->
+                <div class="settings-page active" id="integrations-page">
+                    <div class="settings-page-header">
+                        <h1>Integrations</h1>
+                        <p>Connect Mava's powerful shared team inbox to all of your support channels.</p>
+                        <a href="#" class="read-more">Read more <i class="fas fa-chevron-right"></i></a>
                     </div>
                     
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-plug"></i></div>
-                        <div class="settings-label">Integrations</div>
+                    <div class="settings-page-section">
+                        <h2>Socials & email</h2>
+                        
+                        <div class="integrations-grid">
+                            <!-- Discord Integration -->
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <div class="integration-icon discord">
+                                        <i class="fab fa-discord"></i>
+                                    </div>
+                                    <div class="integration-name">Discord</div>
+                                </div>
+                                <div class="integration-description">
+                                    AI powered private support ticket system & public channel AI bot
+                                </div>
+                                <div class="integration-action">
+                                    <button class="connect-btn"><i class="fas fa-plus"></i> Connect</button>
+                                </div>
+                            </div>
+                            
+                            <!-- Email Integration -->
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <div class="integration-icon email">
+                                        <i class="fas fa-envelope"></i>
+                                    </div>
+                                    <div class="integration-name">oneplayzq6k@mava.email</div>
+                                </div>
+                                <div class="integration-status">
+                                    Connected 2 hours ago
+                                </div>
+                                <div class="integration-actions-row">
+                                    <button class="view-edit-btn"><i class="fas fa-pen"></i> View & Edit</button>
+                                    <button class="disconnect-btn">Disconnect</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-users"></i></div>
-                        <div class="settings-label">Manage Team</div>
-                    </div>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-bell"></i></div>
-                        <div class="settings-label">Team Notifications</div>
-                    </div>
-                    
-                    <div class="settings-item with-dropdown">
-                        <div class="settings-icon"><i class="fas fa-robot"></i></div>
-                        <div class="settings-label">AI</div>
-                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
-                    </div>
-                    
-                    <div class="settings-item with-dropdown">
-                        <div class="settings-icon"><i class="fas fa-magic"></i></div>
-                        <div class="settings-label">Automations</div>
-                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
-                    </div>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-th-large"></i></div>
-                        <div class="settings-label">Categories</div>
-                    </div>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-tags"></i></div>
-                        <div class="settings-label">Tags</div>
-                    </div>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-clipboard-list"></i></div>
-                        <div class="settings-label">Ticket & User Attributes</div>
-                    </div>
-                    
-                    <div class="settings-item">
-                        <div class="settings-icon"><i class="fas fa-ticket-alt"></i></div>
-                        <div class="settings-label">Ticket Settings</div>
-                    </div>
-                    
-                    <div class="settings-item with-dropdown">
-                        <div class="settings-icon"><i class="fas fa-code"></i></div>
-                        <div class="settings-label">API & Webhooks</div>
-                        <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                    <div class="settings-page-section">
+                        <h2>Websites</h2>
+                        
+                        <div class="integrations-grid">
+                            <!-- WebChat Integration -->
+                            <div class="integration-card">
+                                <div class="integration-header">
+                                    <div class="integration-icon webchat">
+                                        <i class="fas fa-comment"></i>
+                                    </div>
+                                    <div class="integration-name">WebChat</div>
+                                </div>
+                                <div class="integration-description">
+                                    Add Mava's customizable web chat to any site for AI powered private support tickets
+                                </div>
+                                <div class="integration-action">
+                                    <button class="connect-btn"><i class="fas fa-plus"></i> Connect</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -639,8 +910,41 @@
                             icon.classList.add('fa-chevron-down');
                         }
                     }
+                    
+                    // Show the appropriate settings page if data-page attribute exists
+                    if (this.dataset.page) {
+                        const pageName = this.dataset.page;
+                        const pages = document.querySelectorAll('.settings-page');
+                        pages.forEach(page => page.classList.remove('active'));
+                        const targetPage = document.getElementById(`${pageName}-page`);
+                        if (targetPage) {
+                            targetPage.classList.add('active');
+                        }
+                    }
                 });
             });
+            
+            // Add click handlers for integration buttons
+            const connectButtons = document.querySelectorAll('.connect-btn');
+            connectButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    alert('This would connect to the integration service.');
+                });
+            });
+            
+            const viewEditButton = document.querySelector('.view-edit-btn');
+            if (viewEditButton) {
+                viewEditButton.addEventListener('click', function() {
+                    alert('This would open the edit dialog for this integration.');
+                });
+            }
+            
+            const disconnectButton = document.querySelector('.disconnect-btn');
+            if (disconnectButton) {
+                disconnectButton.addEventListener('click', function() {
+                    alert('This would disconnect the integration.');
+                });
+            }
         });
     </script>
 </body>
