@@ -17,17 +17,71 @@
             overflow-x: hidden;
         }
         
+        /* New fixed vertical sidebar */
+        .fixed-sidebar {
+            width: 70px;
+            height: 100vh;
+            background: linear-gradient(to bottom, #4b83e2 0%, #253799 70%, #0a0f47 100%);
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+        }
+        
+        .fixed-sidebar-top, .fixed-sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .sidebar-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .sidebar-icon:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .sidebar-icon-primary {
+            background-color: white;
+            color: #4b83e2;
+            border-radius: 50%;
+        }
+        
+        .sidebar-icon i {
+            font-size: 20px;
+        }
+        
+        /* Original collapsible sidebar */
         .sidebar {
             width: 250px;
             height: 100vh;
             background-color: #13131f;
             padding-top: 20px;
             position: fixed;
-            left: 0;
+            left: 70px; /* Positioned after the fixed sidebar */
             top: 0;
             transition: all 0.3s;
             z-index: 100;
             overflow-y: auto;
+        }
+        
+        .hidden {
+            left: -250px; /* Hide it off-screen */
         }
         
         .sidebar-header {
@@ -73,12 +127,18 @@
         }
         
         .main-content {
-            margin-left: 250px;
-            width: calc(100% - 250px);
+            margin-left: 70px; /* Start after the fixed sidebar */
+            width: calc(100% - 70px);
             padding: 20px;
             transition: all 0.3s;
             flex: 1;
             min-height: 100vh;
+        }
+        
+        /* When chat panel is open */
+        .main-content.with-chat-panel {
+            margin-left: 320px; /* 70px + 250px */
+            width: calc(100% - 320px);
         }
         
         .main-header {
@@ -153,6 +213,10 @@
         }
         
         @media (max-width: 768px) {
+            .fixed-sidebar {
+                width: 50px;
+            }
+            
             .sidebar {
                 width: 0;
                 padding: 0;
@@ -163,23 +227,44 @@
             .sidebar.open {
                 width: 250px;
                 padding-top: 20px;
-                left: 0;
+                left: 50px;
             }
             
             .main-content {
-                margin-left: 0;
-                width: 100%;
+                margin-left: 50px;
+                width: calc(100% - 50px);
             }
             
-            .sidebar.open + .main-content {
-                margin-left: 0;
-                width: 100%;
+            .main-content.with-chat-panel {
+                margin-left: 50px;
+                width: calc(100% - 50px);
             }
         }
     </style>
 </head>
 <body>
-    <div class="sidebar" id="sidebar">
+    <!-- New fixed vertical sidebar with gradient blue background -->
+    <div class="fixed-sidebar" id="fixed-sidebar">
+        <div class="fixed-sidebar-top">
+            <div class="sidebar-icon sidebar-icon-primary">
+                <i class="fas fa-comments"></i>
+            </div>
+            <div class="sidebar-icon">
+                <i class="fas fa-chart-bar"></i>
+            </div>
+            <div class="sidebar-icon">
+                <i class="fas fa-cog"></i>
+            </div>
+        </div>
+        <div class="fixed-sidebar-bottom">
+            <div class="sidebar-icon">
+                <i class="fas fa-sign-out-alt"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Existing collapsible sidebar - now only shows when chat is selected -->
+    <div class="sidebar hidden" id="sidebar">
         <div class="sidebar-header">
             <h2>OnePlay</h2>
             <button class="sidebar-toggle" id="sidebar-toggle">
@@ -232,22 +317,66 @@
             const sidebarToggle = document.getElementById('sidebar-toggle');
             const sidebar = document.getElementById('sidebar');
             const mainContent = document.getElementById('main-content');
+            const fixedSidebar = document.getElementById('fixed-sidebar');
             
-            // Function to toggle sidebar
+            // Function to toggle collapsible sidebar
             function toggleSidebar() {
                 sidebar.classList.toggle('sidebar-collapsed');
-                
-                // Adjust main content margin
-                if (sidebar.classList.contains('sidebar-collapsed')) {
-                    mainContent.style.marginLeft = '80px';
-                    mainContent.style.width = 'calc(100% - 80px)';
+                updateMainContentMargin();
+            }
+            
+            // Function to update main content margins based on sidebar states
+            function updateMainContentMargin() {
+                if (sidebar.classList.contains('hidden')) {
+                    // Only fixed sidebar is visible
+                    mainContent.classList.remove('with-chat-panel');
+                    if (window.innerWidth > 768) {
+                        mainContent.style.marginLeft = '70px';
+                        mainContent.style.width = 'calc(100% - 70px)';
+                    } else {
+                        mainContent.style.marginLeft = '50px';
+                        mainContent.style.width = 'calc(100% - 50px)';
+                    }
                 } else {
-                    mainContent.style.marginLeft = '250px';
-                    mainContent.style.width = 'calc(100% - 250px)';
+                    // Both sidebars are visible
+                    mainContent.classList.add('with-chat-panel');
+                    if (window.innerWidth > 768) {
+                        if (!sidebar.classList.contains('sidebar-collapsed')) {
+                            mainContent.style.marginLeft = '320px'; // 70px + 250px
+                            mainContent.style.width = 'calc(100% - 320px)';
+                        } else {
+                            mainContent.style.marginLeft = '150px'; // 70px + 80px (collapsed)
+                            mainContent.style.width = 'calc(100% - 150px)';
+                        }
+                    }
                 }
             }
             
-            sidebarToggle.addEventListener('click', toggleSidebar);
+            // Add click event to sidebar toggle
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', toggleSidebar);
+            }
+            
+            // Handle fixed sidebar icon clicks
+            const sidebarIcons = document.querySelectorAll('.fixed-sidebar .sidebar-icon');
+            sidebarIcons.forEach((icon, index) => {
+                icon.addEventListener('click', function() {
+                    // Remove active class from all icons
+                    sidebarIcons.forEach(i => i.classList.remove('sidebar-icon-primary'));
+                    
+                    // Add active class to clicked icon
+                    this.classList.add('sidebar-icon-primary');
+                    
+                    // If it's the chat icon (first icon)
+                    if (index === 0) {
+                        sidebar.classList.remove('hidden');
+                    } else {
+                        sidebar.classList.add('hidden');
+                    }
+                    
+                    updateMainContentMargin();
+                });
+            });
             
             // Mobile view toggle
             const mobileToggle = document.createElement('button');
@@ -255,7 +384,7 @@
             mobileToggle.innerHTML = '<i class="fas fa-bars"></i>';
             mobileToggle.style.position = 'fixed';
             mobileToggle.style.top = '10px';
-            mobileToggle.style.left = '10px';
+            mobileToggle.style.left = '60px'; // Position after the fixed sidebar
             mobileToggle.style.zIndex = '200';
             mobileToggle.style.display = 'none';
             mobileToggle.style.backgroundColor = '#13131f';
@@ -275,19 +404,18 @@
                 if (window.innerWidth <= 768) {
                     sidebar.classList.remove('sidebar-collapsed');
                     sidebar.classList.remove('open');
-                    mobileToggle.style.display = 'block';
-                    mainContent.style.marginLeft = '0';
-                    mainContent.style.width = '100%';
+                    
+                    // Show mobile toggle only when chat is active
+                    if (!sidebar.classList.contains('hidden')) {
+                        mobileToggle.style.display = 'block';
+                    } else {
+                        mobileToggle.style.display = 'none';
+                    }
                 } else {
                     mobileToggle.style.display = 'none';
-                    if (!sidebar.classList.contains('sidebar-collapsed')) {
-                        mainContent.style.marginLeft = '250px';
-                        mainContent.style.width = 'calc(100% - 250px)';
-                    } else {
-                        mainContent.style.marginLeft = '80px';
-                        mainContent.style.width = 'calc(100% - 80px)';
-                    }
                 }
+                
+                updateMainContentMargin();
             }
             
             window.addEventListener('resize', checkWidth);
@@ -315,6 +443,15 @@
                 userDisplay.style.marginRight = '15px';
                 document.querySelector('.main-header').insertBefore(userDisplay, document.querySelector('.logout-btn'));
             }
+            
+            // Add logout functionality to bottom icon in fixed sidebar
+            const logoutIcon = document.querySelector('.fixed-sidebar-bottom .sidebar-icon');
+            logoutIcon.addEventListener('click', function() {
+                // Clear session data
+                sessionStorage.removeItem('loggedInUser');
+                // Redirect to login page
+                window.location.href = '../index.html';
+            });
         });
     </script>
 </body>
