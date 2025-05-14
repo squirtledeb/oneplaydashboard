@@ -184,9 +184,13 @@
         
         /* Settings Layout */
         .settings-view {
-            display: flex;
+            display: none; /* Start hidden by default */
             height: 100vh;
             width: 100%;
+        }
+        
+        .settings-view.active {
+            display: flex;
         }
         
         .settings-column {
@@ -442,6 +446,481 @@
             flex: 1;
         }
         
+        /* AI Knowledge Base Styles */
+        .settings-submenu {
+            padding-left: 25px;
+            margin-bottom: 10px;
+        }
+        
+        .settings-item.sub-item {
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        
+        .settings-item.sub-item .settings-icon {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+        }
+        
+        .header-with-button {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .header-with-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .premium-badge {
+            background-color: #4b3c99;
+            color: white;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        
+        .section-description {
+            color: #a0a0c0;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        .upload-btn {
+            background-color: #4b83e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .upload-container {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 30px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .upload-icon {
+            font-size: 30px;
+            color: #4b83e2;
+            margin-right: 20px;
+            width: 50px;
+            text-align: center;
+        }
+        
+        .upload-text {
+            flex: 1;
+        }
+        
+        .upload-text h3 {
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .upload-text p {
+            color: #a0a0c0;
+            font-size: 14px;
+        }
+        
+        .upload-action-btn {
+            background-color: #4b83e2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 15px;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        
+        .upload-action-btn i {
+            margin-right: 5px;
+        }
+        
+        .source-table {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+        
+        .source-table-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            padding: 15px 20px;
+            border-bottom: 1px solid #2e2e4e;
+            font-weight: 500;
+        }
+        
+        .source-table-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            padding: 15px 20px;
+            align-items: center;
+        }
+        
+        .source-column {
+            display: flex;
+            align-items: center;
+        }
+        
+        .source-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+        }
+        
+        .source-icon.discord {
+            background-color: #5865F2;
+            color: white;
+        }
+        
+        .status-column.disabled {
+            color: #a0a0c0;
+        }
+        
+        .activate-btn {
+            background-color: transparent;
+            border: 1px solid #4b83e2;
+            color: #4b83e2;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        
+        .scripted-reply-container {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .reply-icon {
+            font-size: 24px;
+            color: #a0a0c0;
+            margin-right: 20px;
+            width: 40px;
+            text-align: center;
+        }
+        
+        .reply-content h3 {
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .reply-content p {
+            color: #a0a0c0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal.active {
+            display: flex;
+        }
+        
+        .modal-content {
+            background-color: #1a1a2e;
+            width: 100%;
+            max-width: 550px;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #2a2a40;
+        }
+        
+        .modal-header h2 {
+            font-size: 24px;
+            font-weight: 500;
+            color: white;
+            margin: 0;
+        }
+        
+        .close-modal {
+            background: transparent;
+            border: none;
+            color: #a0a0c0;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+        .modal-body {
+            padding: 20px;
+        }
+        
+        .modal-description {
+            color: #a0a0c0;
+            font-size: 15px;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: white;
+        }
+        
+        .url-input-container {
+            width: 100%;
+        }
+        
+        .url-input {
+            width: 100%;
+            background-color: #13131f;
+            border: 1px solid #2a2a40;
+            color: white;
+            padding: 12px 15px;
+            font-size: 16px;
+            border-radius: 6px;
+        }
+        
+        .select-container {
+            position: relative;
+        }
+        
+        .pages-select {
+            width: 100%;
+            appearance: none;
+            background-color: #13131f;
+            border: 1px solid #2a2a40;
+            color: white;
+            padding: 12px 15px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        
+        .select-arrow {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a0a0c0;
+            pointer-events: none;
+        }
+        
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid #2a2a40;
+        }
+        
+        .save-btn {
+            width: 100%;
+            background-color: #4b83e2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .save-btn:hover {
+            background-color: #3a72d1;
+        }
+        
+        /* AI Settings Page Styles */
+        .settings-panel {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .settings-toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .settings-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+        }
+        
+        .info-icon {
+            color: #a0a0c0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #2e2e44;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: #4b83e2;
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        
+        .settings-section-header {
+            margin-bottom: 15px;
+        }
+        
+        .settings-section-header h2 {
+            font-size: 18px;
+            font-weight: 500;
+            margin: 0;
+        }
+        
+        .settings-description {
+            color: #a0a0c0;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-control {
+            width: 100%;
+            background-color: #13131f;
+            border: 1px solid #2a2a40;
+            color: white;
+            padding: 12px 15px;
+            font-size: 15px;
+            border-radius: 6px;
+        }
+        
+        .form-control:focus {
+            border-color: #4b83e2;
+            outline: none;
+        }
+        
+        .textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .form-error {
+            color: #ff6b6b;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        .warning-message {
+            color: #ffa400;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: flex-start;
+        }
+        
+        .save-settings-btn {
+            background-color: #4b83e2;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .save-settings-btn:hover {
+            background-color: #3a72d1;
+        }
+        
         .user-info {
             color: #a0a0c0;
             font-size: 14px;
@@ -617,10 +1096,28 @@
                             <div class="settings-label">Team Notifications</div>
                         </div>
                         
-                        <div class="settings-item with-dropdown">
+                        <div class="settings-item with-dropdown" id="ai-menu-item">
                             <div class="settings-icon"><i class="fas fa-robot"></i></div>
                             <div class="settings-label">AI</div>
                             <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
+                        </div>
+                        <div class="settings-submenu" id="ai-submenu" style="display: none;">
+                            <div class="settings-item sub-item" data-page="ai-settings">
+                                <div class="settings-icon"><i class="fas fa-cog"></i></div>
+                                <div class="settings-label">Settings</div>
+                            </div>
+                            <div class="settings-item sub-item" data-page="ai-knowledge-base">
+                                <div class="settings-icon"><i class="fas fa-brain"></i></div>
+                                <div class="settings-label">Knowledge Base</div>
+                            </div>
+                            <div class="settings-item sub-item">
+                                <div class="settings-icon"><i class="fas fa-edit"></i></div>
+                                <div class="settings-label">View & Edit Content</div>
+                            </div>
+                            <div class="settings-item sub-item">
+                                <div class="settings-icon"><i class="fas fa-upload"></i></div>
+                                <div class="settings-label">Upload Sources</div>
+                            </div>
                         </div>
                         
                         <div class="settings-item with-dropdown">
@@ -659,6 +1156,127 @@
             </div>
             
             <div class="settings-content" id="settings-content">
+                <!-- AI Settings Page -->
+                <div class="settings-page" id="ai-settings-page">
+                    <div class="settings-page-header">
+                        <h1>AI Settings</h1>
+                    </div>
+                    
+                    <div class="settings-panel">
+                        <div class="settings-toggle-row">
+                            <div class="settings-toggle-label">
+                                <span>Public channel AI assistant</span>
+                                <i class="fas fa-info-circle info-icon"></i>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="public-ai-toggle">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-panel">
+                        <div class="settings-section-header">
+                            <h2>Your Mava AI agent works for</h2>
+                        </div>
+                        <p class="settings-description">For Mava AI to work accurately, it needs to understand who it's working for. Please make sure the information below is accurate. Keep this clear and concise.</p>
+                        
+                        <div class="form-group">
+                            <label for="org-name">Your organisation's name</label>
+                            <input type="text" id="org-name" class="form-control" placeholder="Organization X">
+                            <div class="form-error">Organization name required</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="org-description">
+                                Your organization's description
+                                <i class="fas fa-info-circle info-icon"></i>
+                            </label>
+                            <textarea id="org-description" class="form-control textarea" rows="6" placeholder="Add a detailed description explaining what your organization does"></textarea>
+                        </div>
+                        
+                        <div class="warning-message">
+                            You must fill out this information before enabling the AI
+                        </div>
+                        
+                        <div class="form-actions">
+                            <button class="save-settings-btn">Save</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Knowledge Base Page -->
+                <div class="settings-page" id="ai-knowledge-base-page">
+                    <div class="settings-page-header">
+                        <h1>AI Knowledge Base</h1>
+                        <p>Upload new sources to Mava AI and manage which Discord roles Mava AI learns from</p>
+                        <a href="#" class="read-more">Read more <i class="fas fa-chevron-right"></i></a>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-button">
+                            <h2>Your knowledge sources</h2>
+                            <button class="upload-btn">Upload content</button>
+                        </div>
+                        <p class="section-description">Add any website, Github, PDF or create a custom text block.</p>
+                        
+                        <div class="upload-container">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <h3>Upload your content</h3>
+                                <p>Add any website, Github, PDF or create a custom text block.</p>
+                            </div>
+                            <button class="upload-action-btn"><i class="fas fa-plus"></i> Upload</button>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-badge">
+                            <h2>Auto training from community channels</h2>
+                            <span class="premium-badge">Premium</span>
+                        </div>
+                        <p class="section-description">Mava AI will learn from every Discord reply your team makes.</p>
+                        
+                        <div class="source-table">
+                            <div class="source-table-header">
+                                <div class="source-column">Source</div>
+                                <div class="status-column">Status</div>
+                                <div class="action-column"></div>
+                            </div>
+                            <div class="source-table-row">
+                                <div class="source-column">
+                                    <div class="source-icon discord"><i class="fab fa-discord"></i></div>
+                                    <div class="source-name">Test</div>
+                                </div>
+                                <div class="status-column disabled">Disabled</div>
+                                <div class="action-column">
+                                    <button class="activate-btn">Activate</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-badge">
+                            <h2>Your scripted replies</h2>
+                            <span class="premium-badge">Premium</span>
+                        </div>
+                        <p class="section-description">Pre-defined replies for consistent and very fast responses to certain questions. Only works with Public AI.</p>
+                        
+                        <div class="scripted-reply-container">
+                            <div class="reply-icon">
+                                <i class="fas fa-comment-dots"></i>
+                            </div>
+                            <div class="reply-content">
+                                <h3>Create scripted reply</h3>
+                                <p>Write a custom reply that Mava AI should respond with every time it gets a certain question. Mava AI will analyze user questions and identify matches, even if they are not worded exactly the same.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Integrations Page -->
                 <div class="settings-page active" id="integrations-page">
                     <div class="settings-page-header">
@@ -691,7 +1309,7 @@
                                     <div class="integration-icon email">
                                         <i class="fas fa-envelope"></i>
                                     </div>
-                                    <div class="integration-name">oneplayzq6k@mava.email</div>
+                                    <div class="integration-name">support@oneplay.in</div>
                                 </div>
                                 <div class="integration-status">
                                     Connected 2 hours ago
@@ -795,26 +1413,17 @@
                         // Show sidebar and dashboard, hide settings
                         sidebar.classList.remove('hidden');
                         dashboardView.classList.remove('hidden');
-                        settingsView.classList.add('hidden');
-                        // Ensure settings menu is not visible in tickets view
-                        const settingsMenu = document.getElementById('settings-menu');
-                        if (settingsMenu) settingsMenu.style.display = 'none';
+                        settingsView.classList.remove('active');
                     } else if (index === 2) { // Settings icon (3rd position, index 2)
                         // Show settings view, hide sidebar and dashboard
                         sidebar.classList.add('hidden');
                         dashboardView.classList.add('hidden');
-                        settingsView.classList.remove('hidden');
-                        // Make sure settings menu is visible in settings view
-                        const settingsMenu = document.getElementById('settings-menu');
-                        if (settingsMenu) settingsMenu.style.display = 'block';
+                        settingsView.classList.add('active');
                     } else { // Other icons (like analytics)
                         // Just show dashboard, hide sidebar and settings
                         sidebar.classList.add('hidden');
                         dashboardView.classList.remove('hidden');
-                        settingsView.classList.add('hidden');
-                        // Ensure settings menu is not visible in any other view
-                        const settingsMenu = document.getElementById('settings-menu');
-                        if (settingsMenu) settingsMenu.style.display = 'none';
+                        settingsView.classList.remove('active');
                     }
                     
                     updateMainContentMargin();
@@ -897,23 +1506,29 @@
             });
             
             // Handle settings items click
-            const settingsItems = document.querySelectorAll('.settings-item');
+            const settingsItems = document.querySelectorAll('.settings-item:not(.sub-item)');
             settingsItems.forEach(item => {
                 item.addEventListener('click', function() {
-                    // Remove active class from all items
-                    settingsItems.forEach(i => i.classList.remove('active'));
-                    // Add active class to clicked item
-                    this.classList.add('active');
+                    // Don't remove active class from submenu items when clicking their parent
+                    if (!this.classList.contains('with-dropdown')) {
+                        settingsItems.forEach(i => i.classList.remove('active'));
+                        this.classList.add('active');
+                    }
                     
                     // Handle dropdown toggle if it has a dropdown
                     if (this.classList.contains('with-dropdown')) {
+                        const submenuId = this.id.replace('-item', '-submenu');
+                        const submenu = document.getElementById(submenuId);
+                        
                         const icon = this.querySelector('.dropdown-indicator i');
                         if (icon.classList.contains('fa-chevron-down')) {
                             icon.classList.remove('fa-chevron-down');
                             icon.classList.add('fa-chevron-up');
+                            if (submenu) submenu.style.display = 'block';
                         } else {
                             icon.classList.remove('fa-chevron-up');
                             icon.classList.add('fa-chevron-down');
+                            if (submenu) submenu.style.display = 'none';
                         }
                     }
                     
@@ -929,6 +1544,143 @@
                     }
                 });
             });
+            
+            // Handle submenu items click
+            const submenuItems = document.querySelectorAll('.settings-item.sub-item');
+            submenuItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    // Activate this submenu item
+                    submenuItems.forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // Show the corresponding page if data-page exists
+                    if (this.dataset.page) {
+                        const pageName = this.dataset.page;
+                        const pages = document.querySelectorAll('.settings-page');
+                        pages.forEach(page => page.classList.remove('active'));
+                        const targetPage = document.getElementById(`${pageName}-page`);
+                        if (targetPage) {
+                            targetPage.classList.add('active');
+                        }
+                    }
+                });
+            });
+            
+            // Set up the upload content buttons
+            const uploadButtons = document.querySelectorAll('.upload-btn, .upload-action-btn');
+            uploadButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // Show website URL modal
+                    showWebsiteUrlModal();
+                });
+            });
+            
+            // Website URL modal functionality
+            function showWebsiteUrlModal() {
+                const modal = document.getElementById('website-url-modal');
+                modal.classList.add('active');
+            }
+            
+            // Close modal when clicking the close button
+            const closeModalBtn = document.querySelector('.close-modal');
+            if (closeModalBtn) {
+                closeModalBtn.addEventListener('click', function() {
+                    const modal = document.getElementById('website-url-modal');
+                    modal.classList.remove('active');
+                });
+            }
+            
+            // Close modal when clicking outside the content
+            const websiteUrlModal = document.getElementById('website-url-modal');
+            if (websiteUrlModal) {
+                websiteUrlModal.addEventListener('click', function(e) {
+                    if (e.target === websiteUrlModal) {
+                        websiteUrlModal.classList.remove('active');
+                    }
+                });
+            }
+            
+            // Handle save button click
+            const saveUrlBtn = document.querySelector('.save-btn');
+            if (saveUrlBtn) {
+                saveUrlBtn.addEventListener('click', function() {
+                    const url = document.getElementById('website-url').value;
+                    
+                    if (!url) {
+                        alert('Please enter a valid URL');
+                        return;
+                    }
+                    
+                    // Here you would process the URL submission
+                    console.log('URL submitted:', url);
+                    
+                    // Close the modal
+                    websiteUrlModal.classList.remove('active');
+                    
+                    // Clear the input
+                    document.getElementById('website-url').value = '';
+                    
+                    // Show confirmation
+                    alert(`URL ${url} added successfully!`);
+                });
+            }
+            
+            // AI Settings page functionality
+            const publicAiToggle = document.getElementById('public-ai-toggle');
+            const orgNameInput = document.getElementById('org-name');
+            const orgDescriptionInput = document.getElementById('org-description');
+            const saveSettingsBtn = document.querySelector('.save-settings-btn');
+            
+            if (saveSettingsBtn) {
+                saveSettingsBtn.addEventListener('click', function() {
+                    const orgName = orgNameInput.value.trim();
+                    const orgDescription = orgDescriptionInput.value.trim();
+                    
+                    // Simple validation
+                    if (!orgName) {
+                        orgNameInput.classList.add('error');
+                        return;
+                    }
+                    
+                    // Here you would save the settings to your backend
+                    console.log('Saving AI settings:', {
+                        publicAiEnabled: publicAiToggle.checked,
+                        organizationName: orgName,
+                        organizationDescription: orgDescription
+                    });
+                    
+                    alert('AI settings saved successfully!');
+                });
+            }
+            
+            // Input validation handling
+            if (orgNameInput) {
+                orgNameInput.addEventListener('input', function() {
+                    if (this.value.trim()) {
+                        this.classList.remove('error');
+                    } else {
+                        this.classList.add('error');
+                    }
+                });
+            }
+            
+            // Set up the activate button
+            const activateButton = document.querySelector('.activate-btn');
+            if (activateButton) {
+                activateButton.addEventListener('click', function() {
+                    const statusCell = this.closest('.source-table-row').querySelector('.status-column');
+                    if (statusCell.classList.contains('disabled')) {
+                        statusCell.classList.remove('disabled');
+                        statusCell.textContent = 'Active';
+                        this.textContent = 'Disable';
+                    } else {
+                        statusCell.classList.add('disabled');
+                        statusCell.textContent = 'Disabled';
+                        this.textContent = 'Activate';
+                    }
+                });
+            }
+                });
             
             // Add click handlers for integration buttons
             // Find all connect buttons
@@ -963,5 +1715,29 @@
             }
         });
     </script>
+    <!-- Website URL Upload Modal -->
+    <div class="modal" id="website-url-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Insert website url</h2>
+                <button class="close-modal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">You can upload any website, Gitbook, Google Docs etc. Make sure the link is publicly accessible.</p>
+                
+                <div class="form-group">
+                    <label for="website-url">Website URL</label>
+                    <div class="url-input-container">
+                        <input type="text" id="website-url" placeholder="https://" class="url-input">
+                    </div>
+                </div>
+                
+
+            </div>
+            <div class="modal-footer">
+                <button class="save-btn">Save</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
