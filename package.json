@@ -1,0 +1,23 @@
+{
+  "name": "oneplay-cloud-dashboard",
+  "version": "1.0.0",
+  "description": "OnePlay Cloud Gaming Dashboard",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js --ignore 'users.json'",
+    "static": "npx live-server --port=8080 --no-browser",
+    "check": "node check-clientside-auth.js",
+    "add-user": "node server/add-user.js",
+    "remove-user": "node server/remove-user.js",
+    "list-users": "node server/list-users.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "live-server": "^1.2.2",
+    "nodemon": "^2.0.22"
+  }
+}

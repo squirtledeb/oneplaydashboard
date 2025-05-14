@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnePlay Dashboard</title>
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background-color: #0e0e18;
+            color: white;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            display: flex;
+            overflow-x: hidden;
+        }
+        
+        .sidebar {
+            width: 250px;
+            height: 100vh;
+            background-color: #13131f;
+            padding-top: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            transition: all 0.3s;
+            z-index: 100;
+            overflow-y: auto;
+        }
+        
+        .sidebar-header {
+            padding: 0 20px 20px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .sidebar-header h2 {
+            margin: 0;
+            color: white;
+            font-size: 24px;
+        }
+        
+        .sidebar-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .sidebar-menu li {
+            padding: 15px 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .sidebar-menu li:hover {
+            background-color: #1c1c2e;
+        }
+        
+        .sidebar-menu li.active {
+            background-color: #1c1c2e;
+            border-left: 4px solid #ff0cf5;
+        }
+        
+        .main-content {
+            margin-left: 250px;
+            width: calc(100% - 250px);
+            padding: 20px;
+            transition: all 0.3s;
+            flex: 1;
+            min-height: 100vh;
+        }
+        
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        
+        .search-bar {
+            position: relative;
+            width: 300px;
+        }
+        
+        .search-bar input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border-radius: 20px;
+            border: none;
+            background-color: #1c1c2e;
+            color: white;
+        }
+        
+        .search-bar i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+        
+        .content-section {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .logout-btn {
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            background-color: #ff0cf5;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .logout-btn:hover {
+            background-color: #d00ab5;
+        }
+        
+        .sidebar-collapsed {
+            width: 80px;
+        }
+        
+        .sidebar-collapsed .sidebar-header h2,
+        .sidebar-collapsed .menu-text {
+            display: none;
+        }
+        
+        .sidebar-collapsed + .main-content {
+            margin-left: 80px;
+            width: calc(100% - 80px);
+        }
+        
+        .menu-icon {
+            margin-right: 10px;
+            width: 20px;
+            display: inline-block;
+            text-align: center;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 0;
+                padding: 0;
+                overflow: hidden;
+                left: -250px;
+            }
+            
+            .sidebar.open {
+                width: 250px;
+                padding-top: 20px;
+                left: 0;
+            }
+            
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+            
+            .sidebar.open + .main-content {
+                margin-left: 0;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h2>OnePlay</h2>
+            <button class="sidebar-toggle" id="sidebar-toggle">
+                <i class="fas fa-bars"></i>
+            </button>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="active"><span class="menu-icon"><i class="fas fa-folder-open"></i></span><span class="menu-text">Open</span></li>
+            <li><span class="menu-icon"><i class="fas fa-at"></i></span><span class="menu-text">Mentions</span></li>
+            <li><span class="menu-icon"><i class="fas fa-inbox"></i></span><span class="menu-text">Unassigned</span></li>
+            <li><span class="menu-icon"><i class="fas fa-ticket-alt"></i></span><span class="menu-text">My Tickets</span></li>
+            <li><span class="menu-icon"><i class="fas fa-robot"></i></span><span class="menu-text">AI Tickets</span></li>
+            <li><span class="menu-icon"><i class="fas fa-list"></i></span><span class="menu-text">All</span></li>
+        </ul>
+    </div>
+    
+    <div class="main-content" id="main-content">
+        <div class="main-header">
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search...">
+            </div>
+            <button class="logout-btn">Logout</button>
+        </div>
+        
+        <div class="content-section">
+            <h2>Gaming Dashboard</h2>
+            <p>Welcome to your OnePlay Cloud Gaming dashboard. Here you can manage your games and track your gaming activity.</p>
+        </div>
+        
+        <div class="content-section">
+            <h2>Recent Games</h2>
+            <p>Your recently played games will appear here.</p>
+        </div>
+        
+        <div class="content-section">
+            <h2>Gaming Stats</h2>
+            <p>Your gameplay statistics will appear here.</p>
+        </div>
+        
+        <div class="content-section">
+            <h2>Subscription Details</h2>
+            <p>Your subscription information will appear here.</p>
+        </div>
+    </div>
+    
+    <script src="../js/dashboard.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebar-toggle');
+            const sidebar = document.getElementById('sidebar');
+            const mainContent = document.getElementById('main-content');
+            
+            // Function to toggle sidebar
+            function toggleSidebar() {
+                sidebar.classList.toggle('sidebar-collapsed');
+                
+                // Adjust main content margin
+                if (sidebar.classList.contains('sidebar-collapsed')) {
+                    mainContent.style.marginLeft = '80px';
+                    mainContent.style.width = 'calc(100% - 80px)';
+                } else {
+                    mainContent.style.marginLeft = '250px';
+                    mainContent.style.width = 'calc(100% - 250px)';
+                }
+            }
+            
+            sidebarToggle.addEventListener('click', toggleSidebar);
+            
+            // Mobile view toggle
+            const mobileToggle = document.createElement('button');
+            mobileToggle.classList.add('sidebar-toggle', 'mobile-toggle');
+            mobileToggle.innerHTML = '<i class="fas fa-bars"></i>';
+            mobileToggle.style.position = 'fixed';
+            mobileToggle.style.top = '10px';
+            mobileToggle.style.left = '10px';
+            mobileToggle.style.zIndex = '200';
+            mobileToggle.style.display = 'none';
+            mobileToggle.style.backgroundColor = '#13131f';
+            mobileToggle.style.padding = '8px';
+            mobileToggle.style.borderRadius = '4px';
+            document.body.appendChild(mobileToggle);
+            
+            // Function to toggle mobile sidebar
+            function toggleMobileSidebar() {
+                sidebar.classList.toggle('open');
+            }
+            
+            mobileToggle.addEventListener('click', toggleMobileSidebar);
+            
+            // Responsive behavior
+            function checkWidth() {
+                if (window.innerWidth <= 768) {
+                    sidebar.classList.remove('sidebar-collapsed');
+                    sidebar.classList.remove('open');
+                    mobileToggle.style.display = 'block';
+                    mainContent.style.marginLeft = '0';
+                    mainContent.style.width = '100%';
+                } else {
+                    mobileToggle.style.display = 'none';
+                    if (!sidebar.classList.contains('sidebar-collapsed')) {
+                        mainContent.style.marginLeft = '250px';
+                        mainContent.style.width = 'calc(100% - 250px)';
+                    } else {
+                        mainContent.style.marginLeft = '80px';
+                        mainContent.style.width = 'calc(100% - 80px)';
+                    }
+                }
+            }
+            
+            window.addEventListener('resize', checkWidth);
+            checkWidth(); // Initial check
+            
+            // Menu item click
+            const menuItems = document.querySelectorAll('.sidebar-menu li');
+            menuItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    menuItems.forEach(i => i.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // On mobile, close the sidebar after selection
+                    if (window.innerWidth <= 768) {
+                        sidebar.classList.remove('open');
+                    }
+                });
+            });
+            
+            // Show username if logged in
+            const loggedInUser = sessionStorage.getItem('loggedInUser');
+            if (loggedInUser) {
+                const userDisplay = document.createElement('div');
+                userDisplay.textContent = `Logged in as: ${loggedInUser}`;
+                userDisplay.style.marginRight = '15px';
+                document.querySelector('.main-header').insertBefore(userDisplay, document.querySelector('.logout-btn'));
+            }
+        });
+    </script>
+</body>
+</html>
