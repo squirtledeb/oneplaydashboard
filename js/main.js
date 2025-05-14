@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Hardcoded users for client-side demo
     const users = [
         { username: 'admin', password: 'admin123' },
-        { username: 'user1', password: 'password123' }
+        { username: 'user1', password: 'password123' },
+        { username: 'frozenanalyst', password: '123' }
     ];
     
     loginForm.addEventListener('submit', (e) => {
