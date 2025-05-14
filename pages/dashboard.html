@@ -1327,7 +1327,7 @@
                     </div>
                 </div>
                 
-                <!-- AI Knowledge Base Page (removing this as we've now repurposed it) -->
+                <!-- We've completely removed the old AI Knowledge Base page as we've repurposed it -->
                     <div class="settings-page-header">
                         <h1>AI Knowledge Base</h1>
                         <p>Upload new sources to Mava AI and manage which Discord roles Mava AI learns from</p>
@@ -1399,7 +1399,7 @@
                 </div>
                 
                 <!-- Integrations Page -->
-                <div class="settings-page active" id="integrations-page">
+                <div class="settings-page" id="integrations-page">
                     <div class="settings-page-header">
                         <h1>Integrations</h1>
                     </div>
@@ -1540,6 +1540,10 @@
                         sidebar.classList.add('hidden');
                         dashboardView.classList.add('hidden');
                         settingsView.classList.add('active');
+                        
+                        // Hide all settings pages by default
+                        const settingsPages = document.querySelectorAll('.settings-page');
+                        settingsPages.forEach(page => page.classList.remove('active'));
                     } else { // Other icons (like analytics)
                         // Just show dashboard, hide sidebar and settings
                         sidebar.classList.add('hidden');
@@ -1678,11 +1682,22 @@
                     // Show the appropriate settings page if data-page attribute exists
                     if (this.dataset.page) {
                         const pageName = this.dataset.page;
+                        
+                        // First, hide all settings pages
                         const pages = document.querySelectorAll('.settings-page');
                         pages.forEach(page => page.classList.remove('active'));
+                        
+                        // Then show only the target page
                         const targetPage = document.getElementById(`${pageName}-page`);
                         if (targetPage) {
                             targetPage.classList.add('active');
+                            console.log(`Showing page: ${pageName}-page`);
+                        }
+                    } else {
+                        // If no data-page attribute, hide all pages except the currently active one
+                        if (!this.classList.contains('with-dropdown')) {
+                            const pages = document.querySelectorAll('.settings-page');
+                            pages.forEach(page => page.classList.remove('active'));
                         }
                     }
                 });
@@ -1716,7 +1731,7 @@
                     // Show website URL modal
                     showWebsiteUrlModal();
                 });
-            });
+            }); 
             
             // Website URL modal functionality
             function showWebsiteUrlModal() {
