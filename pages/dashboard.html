@@ -442,18 +442,14 @@
             flex: 1;
         }
         
-        .logout-btn {
-            padding: 8px 16px;
-            border-radius: 4px;
-            border: none;
-            background-color: #ff0cf5;
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s;
+        .user-info {
+            color: #a0a0c0;
+            font-size: 14px;
         }
         
-        .logout-btn:hover {
-            background-color: #d00ab5;
+        .user-info #username-display {
+            color: white;
+            font-weight: 500;
         }
         
         .sidebar-collapsed {
@@ -554,7 +550,7 @@
                     <i class="fas fa-search"></i>
                     <input type="text" placeholder="Search...">
                 </div>
-                <button class="logout-btn">Logout</button>
+                <div class="user-info">Logged in as: <span id="username-display">admin</span></div>
             </div>
             
             <div class="content-section">
@@ -667,8 +663,6 @@
                 <div class="settings-page active" id="integrations-page">
                     <div class="settings-page-header">
                         <h1>Integrations</h1>
-                        <p>Connect Mava's powerful shared team inbox to all of your support channels.</p>
-                        <a href="#" class="read-more">Read more <i class="fas fa-chevron-right"></i></a>
                     </div>
                     
                     <div class="settings-page-section">
@@ -798,17 +792,29 @@
                     
                     // Handle different icon clicks
                     if (index === 0) { // Chat icon
+                        // Show sidebar and dashboard, hide settings
                         sidebar.classList.remove('hidden');
                         dashboardView.classList.remove('hidden');
                         settingsView.classList.add('hidden');
+                        // Ensure settings menu is not visible in tickets view
+                        const settingsMenu = document.getElementById('settings-menu');
+                        if (settingsMenu) settingsMenu.style.display = 'none';
                     } else if (index === 2) { // Settings icon (3rd position, index 2)
+                        // Show settings view, hide sidebar and dashboard
                         sidebar.classList.add('hidden');
                         dashboardView.classList.add('hidden');
                         settingsView.classList.remove('hidden');
-                    } else { // Other icons
+                        // Make sure settings menu is visible in settings view
+                        const settingsMenu = document.getElementById('settings-menu');
+                        if (settingsMenu) settingsMenu.style.display = 'block';
+                    } else { // Other icons (like analytics)
+                        // Just show dashboard, hide sidebar and settings
                         sidebar.classList.add('hidden');
                         dashboardView.classList.remove('hidden');
                         settingsView.classList.add('hidden');
+                        // Ensure settings menu is not visible in any other view
+                        const settingsMenu = document.getElementById('settings-menu');
+                        if (settingsMenu) settingsMenu.style.display = 'none';
                     }
                     
                     updateMainContentMargin();
@@ -875,10 +881,10 @@
             // Show username if logged in
             const loggedInUser = sessionStorage.getItem('loggedInUser');
             if (loggedInUser) {
-                const userDisplay = document.createElement('div');
-                userDisplay.textContent = `Logged in as: ${loggedInUser}`;
-                userDisplay.style.marginRight = '15px';
-                document.querySelector('.main-header').insertBefore(userDisplay, document.querySelector('.logout-btn'));
+                const usernameDisplay = document.getElementById('username-display');
+                if (usernameDisplay) {
+                    usernameDisplay.textContent = loggedInUser;
+                }
             }
             
             // Add logout functionality to bottom icon in fixed sidebar
@@ -925,10 +931,20 @@
             });
             
             // Add click handlers for integration buttons
+            // Find all connect buttons
             const connectButtons = document.querySelectorAll('.connect-btn');
             connectButtons.forEach(button => {
+                // Get the parent card to determine which integration it belongs to
+                const card = button.closest('.integration-card');
+                
                 button.addEventListener('click', function() {
-                    alert('This would connect to the integration service.');
+                    if (card && card.querySelector('.integration-name').textContent.trim() === 'Discord') {
+                        // For Discord integration, redirect to bot connection page
+                        window.open('https://discord.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&scope=bot&permissions=8', '_blank');
+                    } else {
+                        // For other integrations
+                        alert('This would connect to the integration service.');
+                    }
                 });
             });
             
