@@ -448,13 +448,26 @@
         
         /* AI Knowledge Base Styles */
         .settings-submenu {
-            padding-left: 25px;
+            padding: 5px 0;
             margin-bottom: 10px;
+            transition: all 0.3s ease;
+            background-color: #13131f;
         }
         
         .settings-item.sub-item {
-            padding: 6px 10px;
-            font-size: 13px;
+            padding: 12px 20px;
+            font-size: 14px;
+            margin-bottom: 0;
+            transition: background-color 0.2s;
+            border-radius: 0;
+        }
+        
+        .settings-item.sub-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+        }
+        
+        .settings-item.sub-item.active {
+            background-color: #3a3a59;
         }
         
         .settings-item.sub-item .settings-icon {
@@ -629,6 +642,29 @@
             color: #a0a0c0;
             font-size: 14px;
             line-height: 1.5;
+        }
+        
+        /* View & Edit Content styles */
+        .placeholder-content {
+            background-color: #1c1c2e;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        .placeholder-icon {
+            font-size: 40px;
+            color: #4b83e2;
+            margin-bottom: 20px;
+        }
+        
+        .placeholder-content h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .placeholder-content p {
+            color: #a0a0c0;
         }
         
         /* Modal Styles */
@@ -1101,22 +1137,18 @@
                             <div class="settings-label">AI</div>
                             <div class="dropdown-indicator"><i class="fas fa-chevron-down"></i></div>
                         </div>
-                        <div class="settings-submenu" id="ai-submenu" style="display: none;">
-                            <div class="settings-item sub-item" data-page="ai-settings">
-                                <div class="settings-icon"><i class="fas fa-cog"></i></div>
-                                <div class="settings-label">Settings</div>
-                            </div>
-                            <div class="settings-item sub-item" data-page="ai-knowledge-base">
-                                <div class="settings-icon"><i class="fas fa-brain"></i></div>
-                                <div class="settings-label">Knowledge Base</div>
-                            </div>
-                            <div class="settings-item sub-item">
+                        <div class="settings-submenu" id="ai-submenu" style="display: none; margin-left: 35px; background-color: rgba(28, 28, 46, 0.4); border-radius: 5px; margin-right: 15px;">
+                            <div class="settings-item sub-item" data-page="view-edit-content">
                                 <div class="settings-icon"><i class="fas fa-edit"></i></div>
                                 <div class="settings-label">View & Edit Content</div>
                             </div>
-                            <div class="settings-item sub-item">
+                            <div class="settings-item sub-item" data-page="upload-sources">
                                 <div class="settings-icon"><i class="fas fa-upload"></i></div>
                                 <div class="settings-label">Upload Sources</div>
+                            </div>
+                            <div class="settings-item sub-item" data-page="ai-settings">
+                                <div class="settings-icon"><i class="fas fa-cog"></i></div>
+                                <div class="settings-label">Settings</div>
                             </div>
                         </div>
                         
@@ -1205,8 +1237,97 @@
                     </div>
                 </div>
                 
-                <!-- AI Knowledge Base Page -->
-                <div class="settings-page" id="ai-knowledge-base-page">
+                <!-- Upload Sources Page -->
+                <div class="settings-page" id="upload-sources-page">
+                    <div class="settings-page-header">
+                        <h1>AI Knowledge Base</h1>
+                        <p>Upload new sources to Mava AI and manage which Discord roles Mava AI learns from</p>
+                        <a href="#" class="read-more">Read more <i class="fas fa-chevron-right"></i></a>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-button">
+                            <h2>Your knowledge sources</h2>
+                            <button class="upload-btn">Upload content</button>
+                        </div>
+                        <p class="section-description">Add any website, Github, PDF or create a custom text block.</p>
+                        
+                        <div class="upload-container">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <h3>Upload your content</h3>
+                                <p>Add any website, Github, PDF or create a custom text block.</p>
+                            </div>
+                            <button class="upload-action-btn"><i class="fas fa-plus"></i> Upload</button>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-badge">
+                            <h2>Auto training from community channels</h2>
+                            <span class="premium-badge">Premium</span>
+                        </div>
+                        <p class="section-description">Mava AI will learn from every Discord reply your team makes.</p>
+                        
+                        <div class="source-table">
+                            <div class="source-table-header">
+                                <div class="source-column">Source</div>
+                                <div class="status-column">Status</div>
+                                <div class="action-column"></div>
+                            </div>
+                            <div class="source-table-row">
+                                <div class="source-column">
+                                    <div class="source-icon discord"><i class="fab fa-discord"></i></div>
+                                    <div class="source-name">Test</div>
+                                </div>
+                                <div class="status-column disabled">Disabled</div>
+                                <div class="action-column">
+                                    <button class="activate-btn">Activate</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="header-with-badge">
+                            <h2>Your scripted replies</h2>
+                            <span class="premium-badge">Premium</span>
+                        </div>
+                        <p class="section-description">Pre-defined replies for consistent and very fast responses to certain questions. Only works with Public AI.</p>
+                        
+                        <div class="scripted-reply-container">
+                            <div class="reply-icon">
+                                <i class="fas fa-comment-dots"></i>
+                            </div>
+                            <div class="reply-content">
+                                <h3>Create scripted reply</h3>
+                                <p>Write a custom reply that Mava AI should respond with every time it gets a certain question. Mava AI will analyze user questions and identify matches, even if they are not worded exactly the same.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- View & Edit Content Page -->
+                <div class="settings-page" id="view-edit-content-page">
+                    <div class="settings-page-header">
+                        <h1>View & Edit Content</h1>
+                        <p>Manage your AI content and edit existing materials</p>
+                    </div>
+                    
+                    <div class="settings-page-section">
+                        <div class="placeholder-content">
+                            <div class="placeholder-icon">
+                                <i class="fas fa-edit"></i>
+                            </div>
+                            <h3>Content Editor</h3>
+                            <p>Your content management interface will appear here</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- AI Knowledge Base Page (removing this as we've now repurposed it) -->
                     <div class="settings-page-header">
                         <h1>AI Knowledge Base</h1>
                         <p>Upload new sources to Mava AI and manage which Discord roles Mava AI learns from</p>
@@ -1506,6 +1627,28 @@
             });
             
             // Handle settings items click
+            // Ensure AI menu dropdown works first
+            const aiMenuItem = document.getElementById('ai-menu-item');
+            const aiSubmenu = document.getElementById('ai-submenu');
+            if (aiMenuItem && aiSubmenu) {
+                aiMenuItem.addEventListener('click', function(e) {
+                    const icon = this.querySelector('.dropdown-indicator i');
+                    if (icon) {
+                        if (icon.classList.contains('fa-chevron-down')) {
+                            icon.classList.remove('fa-chevron-down');
+                            icon.classList.add('fa-chevron-up');
+                            aiSubmenu.style.display = 'block';
+                        } else {
+                            icon.classList.remove('fa-chevron-up');
+                            icon.classList.add('fa-chevron-down');
+                            aiSubmenu.style.display = 'none';
+                        }
+                    }
+                    e.stopPropagation(); // Prevent other handlers from firing
+                });
+            }
+            
+            // General settings items click handler
             const settingsItems = document.querySelectorAll('.settings-item:not(.sub-item)');
             settingsItems.forEach(item => {
                 item.addEventListener('click', function() {
