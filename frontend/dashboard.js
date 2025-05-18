@@ -1,6 +1,4 @@
-// Complete dashboard.js file (stable, minimal, and functional)
-
-// --- State Management ---
+// Initial state management
 let isCollapsibleOpen = false;
 let currentView = localStorage.getItem('currentView') || 'login';
 let currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'default';
@@ -10,19 +8,36 @@ let availableChannels = [];
 
 // --- WebSocket for instant integration updates ---
 let ws;
+let wsRetryCount = 0;
+const MAX_RETRY_COUNT = 3;
+
 function setupWebSocket() {
   if (ws) ws.close();
   ws = new WebSocket('ws://localhost:4001');
+  
+  ws.onopen = () => {
+    console.log('WebSocket Connected');
+    wsRetryCount = 0;
+    // Request initial state
+    ws.send(JSON.stringify({ type: 'GET_GUILD_STATUS' }));
+  };
+
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.type === 'GUILD_UPDATE') {
+      console.log('WebSocket received:', data);
+      
+      if (data.type === 'GUILD_UPDATE' || data.type === 'GUILD_STATUS') {
         if (data.guilds && data.guilds.length > 0) {
           discordConnected = true;
           connectedServer = data.guilds[0].name;
+          if (data.guilds[0].channels) {
+            availableChannels = data.guilds[0].channels;
+          }
         } else {
           discordConnected = false;
           connectedServer = '';
+          availableChannels = [];
         }
         renderView();
       }
@@ -30,31 +45,54 @@ function setupWebSocket() {
       console.error('WebSocket parse error:', e);
     }
   };
-  ws.onclose = () => setTimeout(setupWebSocket, 2000);
-}
-setupWebSocket();
 
-// --- App Initialization ---
+  ws.onclose = () => {
+    console.log('WebSocket Closed');
+    if (wsRetryCount < MAX_RETRY_COUNT) {
+      wsRetryCount++;
+      setTimeout(setupWebSocket, 2000);
+    }
+  };
+
+  ws.onerror = (error) => {
+    console.error('WebSocket Error:', error);
+  };
+}
+
+// Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
   renderView();
+  setupWebSocket();
+  pollGuildStatus();
+});
+
+// Poll guild status as fallback
+function pollGuildStatus() {
   setInterval(() => {
     fetch('/api/guilds')
       .then(res => res.json())
       .then(guilds => {
+        console.log('Guild status poll:', guilds);
         if (guilds && guilds.length > 0) {
           discordConnected = true;
           connectedServer = guilds[0].name;
+          if (guilds[0].channels) {
+            availableChannels = guilds[0].channels;
+          }
         } else {
           discordConnected = false;
           connectedServer = '';
+          availableChannels = [];
         }
         renderView();
       })
-      .catch(() => {});
+      .catch(error => {
+        console.error('Error polling guild status:', error);
+      });
   }, 5000);
-});
+}
 
-// --- Main Render Function ---
+// Main rendering function
 function renderView() {
   localStorage.setItem('currentView', currentView);
   localStorage.setItem('currentSidebarContent', currentSidebarContent);
@@ -65,7 +103,7 @@ function renderView() {
   }
 }
 
-// --- Login Page ---
+// Login page rendering
 function renderLogin() {
   document.getElementById('app').innerHTML = `
     <div class="flex items-center justify-center h-screen">
@@ -88,13 +126,15 @@ function renderLogin() {
     </div>
   `;
 }
+
+// Handle login form submission
 function handleLogin(event) {
   event.preventDefault();
   currentView = 'dashboard';
   renderView();
 }
 
-// --- Dashboard Layout ---
+// Dashboard rendering
 function renderDashboard() {
   document.getElementById('app').innerHTML = `
     <div class="flex h-screen">
@@ -131,10 +171,10 @@ function renderDashboard() {
           </button>
         </div>
       </div>
-      <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '50px'}">
+      <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '64px'}">
         <div class="p-3">
           <button onclick="toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
             </svg>
           </button>
@@ -157,40 +197,81 @@ function renderDashboard() {
   `;
 }
 
-// --- Sidebar & Navigation ---
+// Connect to Discord
+function connectDiscord() {
+  const clientId = '1372610090888069190';
+  const permissions = '8';
+  const scope = 'bot applications.commands';
+  const redirectUri = encodeURIComponent('http://localhost:3000/api/callback');
+  
+  const url = `https://discord.com/oauth2/authorize?client_id=1372610090888069190&permissions=8&integration_type=0&scope=bot`;
+  
+  window.open(url, '_blank');
+}
+
+// Disconnect from Discord
+function disconnectDiscord() {
+  fetch('/api/disconnect', { method: 'POST' })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        discordConnected = false;
+        connectedServer = '';
+        availableChannels = [];
+        renderView();
+      } else {
+        alert('Failed to disconnect from Discord');
+      }
+    })
+    .catch(error => {
+      console.error('Error disconnecting:', error);
+      alert('Error disconnecting from Discord');
+    });
+}
+
+// Sidebar toggle
 function toggleCollapsible() {
   isCollapsibleOpen = !isCollapsibleOpen;
   renderView();
 }
+
+// Navigation functions
 function logout() {
   currentView = 'login';
   localStorage.setItem('currentView', 'login');
   renderView();
 }
+
 function showTicketsOptions(event) {
   event.preventDefault();
   currentSidebarContent = 'tickets';
   renderView();
 }
+
 function showSettingsOptions(event) {
   event.preventDefault();
   currentSidebarContent = 'settings';
   renderView();
 }
+
 function showIntegrations(event) {
   event.preventDefault();
   currentView = 'integrations';
   renderView();
 }
+
 function showBotSettings(event) {
   event.preventDefault();
   currentView = 'botSetup';
   renderView();
 }
+
 function goBackToDashboard() {
   currentView = 'dashboard';
   renderView();
 }
+
+// Sidebar content rendering
 function getSidebarContent() {
   if (currentSidebarContent === 'tickets') {
     return `
@@ -207,11 +288,12 @@ function getSidebarContent() {
   return `<li class="text-gray-700">No quick options available.</li>`;
 }
 
-// --- Dashboard Content ---
+// Dashboard content rendering
 function renderDashboardContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to your Dashboard</h1>
     <p class="mb-4 text-gray-600">This is your main dashboard area. Select an option from the sidebars to navigate.</p>
+    
     <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
         <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
@@ -226,6 +308,7 @@ function renderDashboardContent() {
         <p class="text-3xl font-bold text-purple-600">3</p>
       </div>
     </div>
+    
     <div class="mt-8">
       <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Activity</h2>
       <div class="border rounded-lg overflow-hidden">
@@ -252,13 +335,6 @@ function renderDashboardContent() {
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">5 hours ago</td>
             </tr>
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap">Ticket #1236</td>
-              <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Active</span>
-              </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">1 day ago</td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -266,11 +342,12 @@ function renderDashboardContent() {
   `;
 }
 
-// --- Integrations Content ---
+// Integrations content rendering
 function renderIntegrationsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Integrations</h1>
     <p class="mb-6 text-gray-600">Connect your dashboard with external services and platforms.</p>
+    
     <div class="mt-6 border rounded-lg p-6">
       <div class="flex items-center justify-between">
         <div class="flex items-center">
@@ -296,6 +373,7 @@ function renderIntegrationsContent() {
         : ''
       }
     </div>
+    
     <div class="mt-6 text-right">
       <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
         Back to Dashboard
@@ -303,21 +381,13 @@ function renderIntegrationsContent() {
     </div>
   `;
 }
-function connectDiscord() {
-  window.open('https://discord.com/oauth2/authorize?client_id=1372610090888069190&permissions=8&scope=bot', '_blank');
-}
-function disconnectDiscord() {
-  discordConnected = false;
-  connectedServer = '';
-  availableChannels = [];
-  renderView();
-}
 
-// --- Bot Setup Content ---
+// Bot Setup content rendering
 function renderBotSetup() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Bot Setup</h1>
     <p class="mb-6 text-gray-600">Configure how the bot will handle tickets in your Discord server.</p>
+    
     ${!discordConnected ? 
       `<div class="p-6 bg-yellow-50 rounded-lg border border-yellow-200 mb-6">
         <p class="text-yellow-700">Please connect your Discord server first in the Integrations section.</p>
@@ -333,25 +403,30 @@ function renderBotSetup() {
             ).join('')}
           </select>
         </div>
+        
         <h3 class="text-lg font-medium mb-3 mt-6">Embedded Message Settings</h3>
         <div class="grid grid-cols-1 gap-4">
           <div>
             <label for="embedTitle" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
             <input type="text" id="embedTitle" value="Support Ticket System" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
           </div>
+          
           <div>
             <label for="embedDescription" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea id="embedDescription" rows="3" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">Click the button below to create a new support ticket.</textarea>
           </div>
+          
           <div>
             <label for="buttonLabel" class="block text-sm font-medium text-gray-700 mb-1">Button Title</label>
             <input type="text" id="buttonLabel" value="Create Ticket" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
           </div>
+          
           <div>
             <label for="embedColor" class="block text-sm font-medium text-gray-700 mb-1">Embed Color</label>
             <input type="color" id="embedColor" value="#5865F2" class="w-full h-10 border border-gray-300 rounded-md shadow-sm p-1 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
           </div>
         </div>
+        
         <div class="mt-6 flex justify-between">
           <button onclick="previewEmbed()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
             Preview Embed
@@ -360,9 +435,11 @@ function renderBotSetup() {
             Deploy to Discord
           </button>
         </div>
+        
         <div id="embedPreview" class="mt-6 hidden"></div>
       </div>`
     }
+    
     <div class="mt-6 text-right">
       <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
         Back to Dashboard
@@ -370,11 +447,14 @@ function renderBotSetup() {
     </div>
   `;
 }
+
+// Preview embed
 function previewEmbed() {
   const title = document.getElementById('embedTitle').value;
   const description = document.getElementById('embedDescription').value;
   const buttonLabel = document.getElementById('buttonLabel').value;
   const color = document.getElementById('embedColor').value;
+
   const previewContainer = document.getElementById('embedPreview');
   previewContainer.innerHTML = `
     <div class="p-4 border rounded-lg" style="border-left: 4px solid ${color}">
@@ -385,35 +465,54 @@ function previewEmbed() {
   `;
   previewContainer.classList.remove('hidden');
 }
-function deployEmbed() {
+
+// Deploy embed
+async function deployEmbed() {
   const channelId = document.getElementById('channelSelect').value;
   const title = document.getElementById('embedTitle').value;
   const description = document.getElementById('embedDescription').value;
   const buttonLabel = document.getElementById('buttonLabel').value;
   const color = document.getElementById('embedColor').value;
+
+  // Input validation
   if (!channelId) {
     alert('Please select a channel.');
     return;
   }
-  fetch('/api/deploy-embed', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channelId, title, description, buttonLabel, color })
-  })
-    .then(res => res.json())
-    .then(response => {
-      if (response.success) {
-        alert('Embed deployed successfully!');
-      } else {
-        alert('Failed to deploy embed.');
-      }
-    })
-    .catch(() => {
-      alert('An error occurred while deploying the embed.');
+
+  if (!title || !description || !buttonLabel) {
+    alert('Please fill in all required fields (title, description, and button label).');
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/deploy-embed', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ 
+        channelId, 
+        title, 
+        description, 
+        buttonLabel, 
+        color 
+      })
     });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert('Embed deployed successfully!');
+    } else {
+      alert('Failed to deploy embed: ' + (data.error || 'Unknown error'));
+    }
+  } catch (err) {
+    alert('An error occurred while deploying the embed. ' + err.message);
+  }
 }
 
-// --- Tickets Sidebar Option Handlers (placeholders) ---
+// Placeholder ticket functions
 function showAllTickets(event) { event.preventDefault(); alert('Show all tickets (not implemented)'); }
 function showOpenTickets(event) { event.preventDefault(); alert('Show open tickets (not implemented)'); }
 function showClosedTickets(event) { event.preventDefault(); alert('Show closed tickets (not implemented)'); }

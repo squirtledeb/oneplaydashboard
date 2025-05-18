@@ -44,6 +44,79 @@ const client = new Client({
   ]
 });
 
+// Update the deploy-embed endpoint with better error handling
+app.post('/api/deploy-embed', async (req, res) => {
+  try {
+    const { channelId, title, description, buttonLabel, color } = req.body;
+    
+    if (!channelId || !title || !description || !buttonLabel) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        success: false
+      });
+    }
+
+    console.log('Attempting to deploy embed to channel:', channelId);
+    
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      console.error('Channel not found:', channelId);
+      return res.status(404).json({ 
+        error: 'Channel not found',
+        success: false
+      });
+    }
+
+    // Verify bot has permission to send messages in this channel
+    const permissions = channel.permissionsFor(client.user);
+    if (!permissions.has('SendMessages') || !permissions.has('ViewChannel')) {
+      console.error('Bot lacks required permissions for channel:', channelId);
+      return res.status(403).json({ 
+        error: 'Bot lacks required permissions in this channel',
+        success: false
+      });
+    }
+
+    // Create the embed with proper error handling for the color
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(description)
+      .setColor(color || '#5865F2')
+      .setTimestamp();
+    
+    const row = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('create_ticket')
+          .setLabel(buttonLabel)
+          .setStyle(ButtonStyle.Primary)
+      );
+    
+    console.log('Sending embed to channel...');
+    const message = await channel.send({ embeds: [embed], components: [row] });
+    
+    // Store this channel as a ticket channel
+    const guildId = channel.guild.id;
+    if (!ticketChannels[guildId]) {
+      ticketChannels[guildId] = [];
+    }
+    ticketChannels[guildId].push(channelId);
+    
+    console.log('Embed deployed successfully to channel:', channelId);
+    res.json({ 
+      success: true,
+      messageId: message.id,
+      channelId: channel.id
+    });
+  } catch (error) {
+    console.error('Error deploying embed:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to deploy embed',
+      success: false
+    });
+  }
+});
+
 // Bot state management
 let connectedGuilds = [];
 let ticketChannels = {};
