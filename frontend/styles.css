@@ -1,0 +1,14 @@
+/* Additional custom styles can be added here */
+.sidebar-transition {
+    transition: width 0.3s ease-in-out;
+}
+
+.collapsible-menu {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-in-out;
+}
+
+.collapsible-menu.open {
+    max-height: 500px;
+}

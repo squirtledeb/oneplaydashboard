@@ -1,0 +1,36 @@
+{
+  "name": "discord-ticket-bot",
+  "version": "1.0.0",
+  "description": "Discord ticket bot with web dashboard",
+  "main": "backend/bot.js",
+  "scripts": {
+    "start": "concurrently \"node backend/bot.js\" \"npx serve frontend -s\"",
+    "start:bot": "node backend/bot.js",
+    "start:dashboard": "npx serve frontend -s",
+    "dev": "nodemon backend/bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "tickets",
+    "dashboard"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "concurrently": "^8.2.2",
+    "cors": "^2.8.5",
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "serve": "^14.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.9.0"
+  }
+}
