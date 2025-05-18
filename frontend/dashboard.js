@@ -1,5 +1,5 @@
 // =====================
-// DASHBOARD.JS (FULL REWRITE)
+// DASHBOARD.JS (ENSURE renderDashboard IS DEFINED BEFORE USE)
 // =====================
 
 // --- CONFIGURATION ---
@@ -8,10 +8,19 @@ const API_BASE = 'http://localhost:4000';
 // --- STATE MANAGEMENT ---
 let isCollapsibleOpen = false;
 let currentView = localStorage.getItem('currentView') || 'login';
-let currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'default';
+let currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'tickets';
 let discordConnected = false;
 let connectedServer = '';
+let connectedGuildId = '';
 let availableChannels = [];
+let selectedChannelId = localStorage.getItem('selectedChannelId') || '';
+let embedTitle = localStorage.getItem('embedTitle') || 'Support Ticket System';
+let embedDescription = localStorage.getItem('embedDescription') || 'Click the button below to create a new support ticket.';
+let embedButtonLabel = localStorage.getItem('embedButtonLabel') || 'Create Ticket';
+let embedColor = localStorage.getItem('embedColor') || '#5865F2';
+let tickets = [];
+let ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
+let ticketActivity = [];
 
 // --- WEBSOCKET FOR REAL-TIME UPDATES ---
 let ws;
@@ -34,13 +43,17 @@ function setupWebSocket() {
         if (data.guilds && data.guilds.length > 0) {
           discordConnected = true;
           connectedServer = data.guilds[0].name;
-          availableChannels = data.guilds[0].channels || [];
+          connectedGuildId = data.guilds[0].id;
+          fetchChannelsForGuild(connectedGuildId);
+          fetchTicketsForGuild(connectedGuildId);
         } else {
           discordConnected = false;
           connectedServer = '';
+          connectedGuildId = '';
           availableChannels = [];
+          tickets = [];
+          renderView();
         }
-        renderView();
       }
     } catch (e) {
       console.error('WebSocket parse error:', e);
@@ -57,6 +70,244 @@ function setupWebSocket() {
   ws.onerror = (error) => {
     console.error('WebSocket Error:', error);
   };
+}
+
+// --- FETCH CHANNELS FOR GUILD ---
+function fetchChannelsForGuild(guildId) {
+  fetch(`${API_BASE}/api/channels/${guildId}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to fetch channels');
+      return res.json();
+    })
+    .then(channels => {
+      availableChannels = channels || [];
+      if (!availableChannels.find(c => c.id === selectedChannelId)) {
+        selectedChannelId = '';
+        localStorage.removeItem('selectedChannelId');
+      }
+      renderView();
+    })
+    .catch(err => {
+      availableChannels = [];
+      renderView();
+    });
+}
+
+// --- FETCH TICKETS FOR GUILD ---
+function fetchTicketsForGuild(guildId) {
+  fetch(`${API_BASE}/api/tickets/${guildId}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to fetch tickets');
+      return res.json();
+    })
+    .then(data => {
+      tickets = data || [];
+      updateTicketDashboardStats();
+      renderView();
+    })
+    .catch(err => {
+      tickets = [];
+      ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
+      ticketActivity = [];
+      renderView();
+    });
+}
+
+// --- UPDATE TICKET DASHBOARD STATS ---
+function updateTicketDashboardStats() {
+  const now = new Date();
+  let active = 0, resolvedToday = 0, newMessages = 0;
+  let activity = [];
+  tickets.forEach(ticket => {
+    if (ticket.status === 'active') active++;
+    if (ticket.status === 'closed') {
+      const last = new Date(ticket.lastUpdated);
+      if (last.toDateString() === now.toDateString()) resolvedToday++;
+    }
+    activity.push({
+      ticketNumber: ticket.ticketNumber,
+      status: ticket.status,
+      lastUpdated: ticket.lastUpdated,
+      userId: ticket.userId
+    });
+  });
+  ticketDashboardStats = { active, resolvedToday, newMessages: 0 };
+  ticketActivity = activity.sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)).slice(0, 10);
+}
+
+// --- RENDERING FUNCTIONS ---
+function renderDashboardContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to your Dashboard</h1>
+    <p class="mb-4 text-gray-600">This is your main dashboard area. Select an option from the sidebars to navigate.</p>
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
+        <p class="text-3xl font-bold text-blue-600">${ticketDashboardStats.active}</p>
+      </div>
+      <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+        <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
+        <p class="text-3xl font-bold text-green-600">${ticketDashboardStats.resolvedToday}</p>
+      </div>
+      <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
+        <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
+        <p class="text-3xl font-bold text-purple-600">${ticketDashboardStats.newMessages}</p>
+      </div>
+    </div>
+    <div class="mt-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Ticket Activity</h2>
+      <div class="border rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            ${ticketActivity.map(t => `
+              <tr>
+                <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+function renderIntegrationsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Integrations</h1>
+    <p class="mb-6 text-gray-600">Connect your dashboard with external services and platforms.</p>
+    <div class="mt-6 border rounded-lg p-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center">
+          <svg class="w-10 h-10 mr-4 text-indigo-600" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 127.14 96.36">
+            <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
+          </svg>
+          <div>
+            <h3 class="text-lg font-semibold">Discord</h3>
+            <p class="text-sm text-gray-600">Connect your Discord server to receive notifications and manage support tickets.</p>
+          </div>
+        </div>
+        <div>
+          ${discordConnected 
+            ? `<button onclick="disconnectDiscord()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">Disconnect</button>`
+            : `<button onclick="connectDiscord()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">Connect</button>`
+          }
+        </div>
+      </div>
+      ${discordConnected && connectedServer 
+        ? `<div class="mt-3 p-3 bg-gray-50 rounded-lg">
+             <div class="text-sm text-gray-700">Connected to server: <span class="font-semibold">${connectedServer}</span></div>
+           </div>`
+        : ''
+      }
+    </div>
+    <div class="mt-6 text-right">
+      <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
+        Back to Dashboard
+      </button>
+    </div>
+  `;
+}
+function renderSettingsDashboardContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Settings</h1>
+    <p class="mb-4 text-gray-600">Select a quick option from the sidebar to configure integrations or bot setup.</p>
+  `;
+}
+function renderClosedTicketsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Closed Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.filter(t => t.status === 'closed').map(t => `
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Resolved</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function renderAllTicketsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">All Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.map(t => `
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function renderOpenTicketsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Open Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.filter(t => t.status === 'active').map(t => `
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Active</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function formatDateTime(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleString();
 }
 
 // --- INITIALIZATION ---
@@ -78,13 +329,17 @@ function pollGuildStatus() {
         if (guilds && guilds.length > 0) {
           discordConnected = true;
           connectedServer = guilds[0].name;
-          availableChannels = guilds[0].channels || [];
+          connectedGuildId = guilds[0].id;
+          fetchChannelsForGuild(connectedGuildId);
+          fetchTicketsForGuild(connectedGuildId);
         } else {
           discordConnected = false;
           connectedServer = '';
+          connectedGuildId = '';
           availableChannels = [];
+          tickets = [];
+          renderView();
         }
-        renderView();
       })
       .catch(error => {
         console.error('Error polling guild status:', error);
@@ -117,6 +372,26 @@ function showSettingsOptions(event) {
   currentSidebarContent = 'settings';
   renderView();
 }
+function showTicketDashboard(event) {
+  event.preventDefault();
+  currentView = 'ticketDashboard';
+  renderView();
+}
+function showAllTickets(event) {
+  event.preventDefault();
+  currentView = 'allTickets';
+  renderView();
+}
+function showOpenTickets(event) {
+  event.preventDefault();
+  currentView = 'openTickets';
+  renderView();
+}
+function showClosedTickets(event) {
+  event.preventDefault();
+  currentView = 'closedTickets';
+  renderView();
+}
 function showIntegrations(event) {
   event.preventDefault();
   currentView = 'integrations';
@@ -132,101 +407,7 @@ function goBackToDashboard() {
   renderView();
 }
 
-// --- DISCORD INTEGRATION ---
-function connectDiscord() {
-  const clientId = '1372610090888069190';
-  const permissions = '8';
-  const scope = 'bot applications.commands';
-  const url = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=${scope}`;
-  window.open(url, '_blank');
-}
-function disconnectDiscord() {
-  fetch(`${API_BASE}/api/disconnect`, { 
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  })
-    .then(res => {
-      if (!res.ok) throw new Error('Network response was not ok');
-      return res.json();
-    })
-    .then(data => {
-      if (data.success) {
-        discordConnected = false;
-        connectedServer = '';
-        availableChannels = [];
-        renderView();
-      } else {
-        throw new Error(data.error || 'Failed to disconnect from Discord');
-      }
-    })
-    .catch(error => {
-      alert('Error disconnecting from Discord: ' + error.message);
-    });
-}
-
-// --- EMBED DEPLOYMENT ---
-async function deployEmbed() {
-  const channelId = document.getElementById('channelSelect').value;
-  const title = document.getElementById('embedTitle').value;
-  const description = document.getElementById('embedDescription').value;
-  const buttonLabel = document.getElementById('buttonLabel').value;
-  const color = document.getElementById('embedColor').value;
-
-  if (!channelId) return alert('Please select a channel.');
-  if (!title || !description || !buttonLabel) {
-    return alert('Please fill in all required fields (title, description, and button label).');
-  }
-
-  try {
-    const response = await fetch(`${API_BASE}/api/deploy-embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channelId, title, description, buttonLabel, color })
-    });
-    if (!response.ok) throw new Error('Network response was not ok');
-    const data = await response.json();
-    if (data.success) {
-      alert('Embed deployed successfully!');
-    } else {
-      throw new Error(data.error || 'Unknown error occurred');
-    }
-  } catch (error) {
-    alert('Failed to deploy embed: ' + error.message);
-  }
-}
-
-// --- RENDERING FUNCTIONS ---
-function renderView() {
-  localStorage.setItem('currentView', currentView);
-  localStorage.setItem('currentSidebarContent', currentSidebarContent);
-  if (currentView === 'login') {
-    renderLogin();
-  } else {
-    renderDashboard();
-  }
-}
-function renderLogin() {
-  document.getElementById('app').innerHTML = `
-    <div class="flex items-center justify-center h-screen">
-      <form class="bg-white p-8 rounded-lg shadow-md w-96" onsubmit="handleLogin(event)">
-        <h2 class="text-2xl font-bold mb-6 text-center text-gray-700">Login</h2>
-        <div class="mb-4">
-          <label class="block text-gray-700 text-sm font-bold mb-2" for="username">Username</label>
-          <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="username" type="text" placeholder="Username">
-        </div>
-        <div class="mb-6">
-          <label class="block text-gray-700 text-sm font-bold mb-2" for="password">Password</label>
-          <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="password" type="password" placeholder="Password">
-        </div>
-        <div class="flex items-center justify-between">
-          <button class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="submit">
-            Sign In
-          </button>
-        </div>
-      </form>
-    </div>
-  `;
-}
+// --- MAIN RENDER FUNCTION ---
 function renderDashboard() {
   document.getElementById('app').innerHTML = `
     <div class="flex h-screen">
@@ -278,11 +459,21 @@ function renderDashboard() {
           </div>
         </div>
       </div>
-      <div class="flex-1 p-8 overflow-auto">
+      <div class="flex-1 p-8 overflow-auto" style="padding-bottom: 0;">
         <div class="bg-white rounded-lg shadow-md p-6">
-          ${currentView === 'integrations' ? renderIntegrationsContent() :
-            currentView === 'botSetup' ? renderBotSetup() :
-            renderDashboardContent()}
+          ${
+            currentSidebarContent === 'tickets'
+              ? (currentView === 'ticketDashboard' ? renderDashboardContent() :
+                currentView === 'allTickets' ? renderAllTicketsContent() :
+                currentView === 'openTickets' ? renderOpenTicketsContent() :
+                currentView === 'closedTickets' ? renderClosedTicketsContent() :
+                renderDashboardContent())
+              : (currentSidebarContent === 'settings'
+                ? (currentView === 'integrations' ? renderIntegrationsContent() :
+                  currentView === 'botSetup' ? renderBotSetup() :
+                  renderSettingsDashboardContent())
+                : renderDashboardContent())
+          }
         </div>
       </div>
     </div>
@@ -291,177 +482,126 @@ function renderDashboard() {
 function getSidebarContent() {
   if (currentSidebarContent === 'tickets') {
     return `
-      <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
+      <li><a href="#" onclick="showTicketDashboard(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Ticket Dashboard</a></li>
       <li><a href="#" onclick="showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Open Tickets</a></li>
       <li><a href="#" onclick="showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Closed Tickets</a></li>
+      <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
     `;
   } else if (currentSidebarContent === 'settings') {
     return `
       <li><a href="#" onclick="showIntegrations(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Integrations</a></li>
-      <li><a href="#" onclick="showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Bot Settings</a></li>
+      <li><a href="#" onclick="showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Bot Setup</a></li>
     `;
   }
   return `<li class="text-gray-700">No quick options available.</li>`;
 }
-function renderDashboardContent() {
+function renderSettingsDashboardContent() {
   return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to your Dashboard</h1>
-    <p class="mb-4 text-gray-600">This is your main dashboard area. Select an option from the sidebars to navigate.</p>
-    <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
-        <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
-        <p class="text-3xl font-bold text-blue-600">12</p>
-      </div>
-      <div class="bg-green-50 p-6 rounded-lg border border-green-200">
-        <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
-        <p class="text-3xl font-bold text-green-600">5</p>
-      </div>
-      <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
-        <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
-        <p class="text-3xl font-bold text-purple-600">3</p>
-      </div>
-    </div>
-    <div class="mt-8">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Activity</h2>
-      <div class="border rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Settings</h1>
+    <p class="mb-4 text-gray-600">Select a quick option from the sidebar to configure integrations or bot setup.</p>
+  `;
+}
+function renderClosedTicketsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Closed Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.filter(t => t.status === 'closed').map(t => `
             <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap">Ticket #1234</td>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Resolved</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2 hours ago</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
             </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+function renderAllTicketsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">All Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.map(t => `
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap">Ticket #1235</td>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">In Progress</span>
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">5 hours ago</td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
             </tr>
-          </tbody>
-        </table>
-      </div>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
-function renderIntegrationsContent() {
+function renderOpenTicketsContent() {
   return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Integrations</h1>
-    <p class="mb-6 text-gray-600">Connect your dashboard with external services and platforms.</p>
-    <div class="mt-6 border rounded-lg p-6">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center">
-          <svg class="w-10 h-10 mr-4 text-indigo-600" fill="currentColor" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 127.14 96.36">
-            <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/>
-          </svg>
-          <div>
-            <h3 class="text-lg font-semibold">Discord</h3>
-            <p class="text-sm text-gray-600">Connect your Discord server to receive notifications and manage support tickets.</p>
-          </div>
-        </div>
-        <div>
-          ${discordConnected 
-            ? `<button onclick="disconnectDiscord()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">Disconnect</button>`
-            : `<button onclick="connectDiscord()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">Connect</button>`
-          }
-        </div>
-      </div>
-      ${discordConnected && connectedServer 
-        ? `<div class="mt-3 p-3 bg-gray-50 rounded-lg">
-             <div class="text-sm text-gray-700">Connected to server: <span class="font-semibold">${connectedServer}</span></div>
-           </div>`
-        : ''
-      }
-    </div>
-    <div class="mt-6 text-right">
-      <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
-        Back to Dashboard
-      </button>
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Open Tickets</h1>
+    <div class="border rounded-lg overflow-hidden">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${tickets.filter(t => t.status === 'active').map(t => `
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Active</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
     </div>
   `;
 }
-function renderBotSetup() {
-  return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Bot Setup</h1>
-    <p class="mb-6 text-gray-600">Configure how the bot will handle tickets in your Discord server.</p>
-    ${!discordConnected ? 
-      `<div class="p-6 bg-yellow-50 rounded-lg border border-yellow-200 mb-6">
-        <p class="text-yellow-700">Please connect your Discord server first in the Integrations section.</p>
-      </div>` :
-      `<div class="border rounded-lg p-6 mb-6">
-        <h2 class="text-xl font-semibold mb-4">Channel Configuration</h2>
-        <div class="mb-4">
-          <label for="channelSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Channel for Ticket Messages</label>
-          <select id="channelSelect" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-            <option value="">-- Select a channel --</option>
-            ${availableChannels.map(channel => 
-              `<option value="${channel.id}">${channel.name}</option>`
-            ).join('')}
-          </select>
-        </div>
-        <h3 class="text-lg font-medium mb-3 mt-6">Embedded Message Settings</h3>
-        <div class="grid grid-cols-1 gap-4">
-          <div>
-            <label for="embedTitle" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-            <input type="text" id="embedTitle" value="Support Ticket System" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-          </div>
-          <div>
-            <label for="embedDescription" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea id="embedDescription" rows="3" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">Click the button below to create a new support ticket.</textarea>
-          </div>
-          <div>
-            <label for="buttonLabel" class="block text-sm font-medium text-gray-700 mb-1">Button Title</label>
-            <input type="text" id="buttonLabel" value="Create Ticket" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-          </div>
-          <div>
-            <label for="embedColor" class="block text-sm font-medium text-gray-700 mb-1">Embed Color</label>
-            <input type="color" id="embedColor" value="#5865F2" class="w-full h-10 border border-gray-300 rounded-md shadow-sm p-1 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-          </div>
-        </div>
-        <div class="mt-6 flex justify-between">
-          <button onclick="previewEmbed()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
-            Preview Embed
-          </button>
-          <button onclick="deployEmbed()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">
-            Deploy to Discord
-          </button>
-        </div>
-        <div id="embedPreview" class="mt-6 hidden"></div>
-      </div>`
-    }
-    <div class="mt-6 text-right">
-      <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
-        Back to Dashboard
-      </button>
-    </div>
-  `;
-}
-function previewEmbed() {
-  const title = document.getElementById('embedTitle').value;
-  const description = document.getElementById('embedDescription').value;
-  const buttonLabel = document.getElementById('buttonLabel').value;
-  const color = document.getElementById('embedColor').value;
-  const previewContainer = document.getElementById('embedPreview');
-  previewContainer.innerHTML = `
-    <div class="p-4 border rounded-lg" style="border-left: 4px solid ${color}">
-      <h3 class="text-lg font-bold">${title}</h3>
-      <p>${description}</p>
-      <button class="mt-2 px-4 py-2 bg-blue-500 text-white rounded">${buttonLabel}</button>
-    </div>
-  `;
-  previewContainer.classList.remove('hidden');
+function formatDateTime(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  return d.toLocaleString();
 }
 
-// --- PLACEHOLDER TICKET FUNCTIONS ---
-function showAllTickets(event) { event.preventDefault(); alert('Show all tickets (not implemented)'); }
-function showOpenTickets(event) { event.preventDefault(); alert('Show open tickets (not implemented)'); }
-function showClosedTickets(event) { event.preventDefault(); alert('Show closed tickets (not implemented)'); }
+// --- MAIN RENDER FUNCTION ---
+function renderView() {
+  localStorage.setItem('currentView', currentView);
+  localStorage.setItem('currentSidebarContent', currentSidebarContent);
+  if (currentView === 'login') {
+    renderLogin();
+  } else {
+    renderDashboard();
+  }
+}
+
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+  renderView();
+  setupWebSocket();
+  pollGuildStatus();
+});

@@ -19,7 +19,35 @@ const clients = new Set();
 // WebSocket connection handling
 wss.on('connection', (ws) => {
   clients.add(ws);
-  
+  if (client.isReady()) {
+    const guilds = client.guilds.cache.map(guild => ({
+      id: guild.id,
+      name: guild.name
+    }));
+    ws.send(JSON.stringify({
+      type: 'GUILD_STATUS',
+      guilds
+    }));
+  }
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message);
+      if (data.type === 'GET_GUILD_STATUS') {
+        if (client.isReady()) {
+          const guilds = client.guilds.cache.map(guild => ({
+            id: guild.id,
+            name: guild.name
+          }));
+          ws.send(JSON.stringify({
+            type: 'GUILD_STATUS',
+            guilds
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('WebSocket message error:', e);
+    }
+  });
   ws.on('close', () => {
     clients.delete(ws);
   });
@@ -27,9 +55,10 @@ wss.on('connection', (ws) => {
 
 // Function to broadcast updates to all connected clients
 function broadcastUpdate(data) {
+  const message = JSON.stringify(data);
   clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
+      client.send(message);
     }
   });
 }
@@ -44,131 +73,72 @@ const client = new Client({
   ]
 });
 
-// Update the deploy-embed endpoint with better error handling
-app.post('/api/deploy-embed', async (req, res) => {
-  try {
-    const { channelId, title, description, buttonLabel, color } = req.body;
-    
-    if (!channelId || !title || !description || !buttonLabel) {
-      return res.status(400).json({ 
-        error: 'Missing required fields',
-        success: false
-      });
-    }
-
-    console.log('Attempting to deploy embed to channel:', channelId);
-    
-    const channel = await client.channels.fetch(channelId);
-    if (!channel) {
-      console.error('Channel not found:', channelId);
-      return res.status(404).json({ 
-        error: 'Channel not found',
-        success: false
-      });
-    }
-
-    // Verify bot has permission to send messages in this channel
-    const permissions = channel.permissionsFor(client.user);
-    if (!permissions.has('SendMessages') || !permissions.has('ViewChannel')) {
-      console.error('Bot lacks required permissions for channel:', channelId);
-      return res.status(403).json({ 
-        error: 'Bot lacks required permissions in this channel',
-        success: false
-      });
-    }
-
-    // Create the embed with proper error handling for the color
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(description)
-      .setColor(color || '#5865F2')
-      .setTimestamp();
-    
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('create_ticket')
-          .setLabel(buttonLabel)
-          .setStyle(ButtonStyle.Primary)
-      );
-    
-    console.log('Sending embed to channel...');
-    const message = await channel.send({ embeds: [embed], components: [row] });
-    
-    // Store this channel as a ticket channel
-    const guildId = channel.guild.id;
-    if (!ticketChannels[guildId]) {
-      ticketChannels[guildId] = [];
-    }
-    ticketChannels[guildId].push(channelId);
-    
-    console.log('Embed deployed successfully to channel:', channelId);
-    res.json({ 
-      success: true,
-      messageId: message.id,
-      channelId: channel.id
-    });
-  } catch (error) {
-    console.error('Error deploying embed:', error);
-    res.status(500).json({ 
-      error: error.message || 'Failed to deploy embed',
-      success: false
-    });
-  }
-});
-
 // Bot state management
 let connectedGuilds = [];
 let ticketChannels = {};
 let activeTickets = {};
+let ticketCounters = {}; // { guildId: nextTicketNumber }
 
 // Discord bot token from environment variable
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 
 // Set up API endpoints
-// Always refresh connectedGuilds to reflect current state
 app.get('/api/guilds', (req, res) => {
-  connectedGuilds = client.guilds.cache.map(guild => ({
+  if (!client.isReady()) {
+    return res.status(503).json({ error: 'Bot is not ready' });
+  }
+  const guilds = client.guilds.cache.map(guild => ({
     id: guild.id,
     name: guild.name
   }));
-  console.log('[API] /api/guilds called. Current guilds:', connectedGuilds.map(g => g.name).join(', '));
-  res.json(connectedGuilds);
+  res.json(guilds);
 });
 
 app.get('/api/channels/:guildId', (req, res) => {
   const { guildId } = req.params;
   const guild = client.guilds.cache.get(guildId);
-  
   if (!guild) {
     return res.status(404).json({ error: 'Guild not found' });
   }
-  
   const channels = guild.channels.cache
-    .filter(channel => channel.type === 0) // Text channels only
+    .filter(channel => channel.type === 0)
     .map(channel => ({
       id: channel.id,
       name: channel.name
     }));
-  
   res.json(channels);
+});
+
+app.get('/api/tickets/:guildId', (req, res) => {
+  const { guildId } = req.params;
+  const tickets = [];
+  if (activeTickets[guildId]) {
+    for (const ticketNumber in activeTickets[guildId]) {
+      tickets.push(activeTickets[guildId][ticketNumber]);
+    }
+  }
+  res.json(tickets);
 });
 
 app.post('/api/deploy-embed', async (req, res) => {
   try {
     const { channelId, title, description, buttonLabel, color } = req.body;
-    
+    if (!channelId || !title || !description || !buttonLabel) {
+      return res.status(400).json({ error: 'Missing required fields', success: false });
+    }
     const channel = await client.channels.fetch(channelId);
     if (!channel) {
-      return res.status(404).json({ error: 'Channel not found' });
+      return res.status(404).json({ error: 'Channel not found', success: false });
     }
-    
+    const permissions = channel.permissionsFor(client.user);
+    if (!permissions.has('SendMessages') || !permissions.has('ViewChannel')) {
+      return res.status(403).json({ error: 'Bot lacks required permissions in this channel', success: false });
+    }
+    // Remove timestamp from embed
     const embed = new EmbedBuilder()
       .setTitle(title)
       .setDescription(description)
-      .setColor(color)
-      .setTimestamp();
-    
+      .setColor(color || '#5865F2');
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
@@ -176,126 +146,111 @@ app.post('/api/deploy-embed', async (req, res) => {
           .setLabel(buttonLabel)
           .setStyle(ButtonStyle.Primary)
       );
-    
-    await channel.send({ embeds: [embed], components: [row] });
-    
-    // Store this channel as a ticket channel
+    const message = await channel.send({ embeds: [embed], components: [row] });
     const guildId = channel.guild.id;
     if (!ticketChannels[guildId]) {
       ticketChannels[guildId] = [];
     }
     ticketChannels[guildId].push(channelId);
-    
-    res.json({ success: true });
+    res.json({ success: true, messageId: message.id, channelId: channel.id });
   } catch (error) {
-    console.error('Error deploying embed:', error);
-    res.status(500).json({ error: 'Failed to deploy embed' });
+    res.status(500).json({ error: error.message || 'Failed to deploy embed', success: false });
   }
-});
-
-app.get('/api/tickets', (req, res) => {
-  // Transform the activeTickets object into an array for easier consumption
-  const tickets = [];
-  
-  for (const guildId in activeTickets) {
-    for (const userId in activeTickets[guildId]) {
-      const ticket = activeTickets[guildId][userId];
-      tickets.push({
-        guildId,
-        userId,
-        channelId: ticket.channelId,
-        createdAt: ticket.createdAt,
-        status: ticket.status
-      });
-    }
-  }
-  
-  res.json(tickets);
 });
 
 // Bot startup
 client.once('ready', () => {
-  console.log(`Bot is online! Logged in as ${client.user.tag}`);
-  
-  // Store connected guilds
   connectedGuilds = client.guilds.cache.map(guild => ({
     id: guild.id,
     name: guild.name
   }));
-  
-  console.log(`Connected to ${connectedGuilds.length} servers`);
-});
-
-// Handle bot joining a new server
-client.on('guildCreate', (guild) => {
-  console.log(`Joined a new guild: ${guild.name} (${guild.id})`);
-  
-  // Add to our connected guilds list
-  connectedGuilds.push({
-    id: guild.id,
-    name: guild.name
-  });
-
-  // Broadcast the update to all connected clients
   broadcastUpdate({
     type: 'GUILD_UPDATE',
     guilds: connectedGuilds
   });
 });
 
-// Handle button interactions for ticket creation
+// Handle bot joining a new server
+client.on('guildCreate', (guild) => {
+  connectedGuilds.push({
+    id: guild.id,
+    name: guild.name
+  });
+  broadcastUpdate({
+    type: 'GUILD_UPDATE',
+    guilds: connectedGuilds
+  });
+});
+
+// Handle bot leaving a server
+client.on('guildDelete', (guild) => {
+  connectedGuilds = connectedGuilds.filter(g => g.id !== guild.id);
+  broadcastUpdate({
+    type: 'GUILD_UPDATE',
+    guilds: connectedGuilds
+  });
+});
+
+// --- TICKET NUMBER GENERATION ---
+function getNextTicketNumber(guildId) {
+  if (!ticketCounters[guildId]) ticketCounters[guildId] = 1;
+  let num = ticketCounters[guildId];
+  ticketCounters[guildId]++;
+  if (ticketCounters[guildId] > 9999) ticketCounters[guildId] = 1;
+  return num.toString().padStart(4, '0');
+}
+
+// --- TICKET INTERACTIONS ---
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
-  
-  // Handle ticket creation button
   if (interaction.customId === 'create_ticket') {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    
+    if (!activeTickets[guildId]) activeTickets[guildId] = {};
     // Check if user already has an open ticket
-    if (activeTickets[guildId] && activeTickets[guildId][userId]) {
-      return interaction.reply({
-        content: `You already have an open ticket. Please use that one.`,
-        ephemeral: true
-      });
+    for (const tNum in activeTickets[guildId]) {
+      if (activeTickets[guildId][tNum].userId === userId && activeTickets[guildId][tNum].status === 'active') {
+        return interaction.reply({
+          content: `You already have an open ticket (#${tNum}). Please use that one.`,
+          ephemeral: true
+        });
+      }
     }
-    
+    // Generate ticket number
+    const ticketNumber = getNextTicketNumber(guildId);
     try {
       // Create a new ticket channel
       const channel = await interaction.guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: 0, // Text channel
+        name: ticketNumber,
+        type: 0,
         permissionOverwrites: [
           {
-            id: interaction.guild.id, // @everyone role
+            id: interaction.guild.id,
             deny: ['ViewChannel']
           },
           {
-            id: userId, // Ticket creator
+            id: userId,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
           },
           {
-            id: client.user.id, // Bot
+            id: client.user.id,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
           }
         ]
       });
-      
       // Store the active ticket
-      if (!activeTickets[guildId]) activeTickets[guildId] = {};
-      activeTickets[guildId][userId] = {
+      activeTickets[guildId][ticketNumber] = {
+        ticketNumber,
+        userId,
         channelId: channel.id,
         createdAt: new Date(),
-        status: 'active'
+        status: 'active',
+        lastUpdated: new Date()
       };
-      
-      // Send initial message in the ticket channel
       const embed = new EmbedBuilder()
         .setTitle('Support Ticket')
-        .setDescription(`Hello ${interaction.user}, support staff will be with you shortly.`)
-        .setColor('#5865F2')
-        .setTimestamp();
-      
+        .setDescription(`Hello <@${userId}>, support staff will be with you shortly.`)
+        .setColor('#5865F2');
       const closeButton = new ActionRowBuilder()
         .addComponents(
           new ButtonBuilder()
@@ -303,61 +258,44 @@ client.on('interactionCreate', async (interaction) => {
             .setLabel('Close Ticket')
             .setStyle(ButtonStyle.Danger)
         );
-      
-      await channel.send({ 
+      await channel.send({
         embeds: [embed],
         components: [closeButton]
       });
-      
-      // Notify the user that the ticket was created
       return interaction.reply({
-        content: `Your ticket has been created: <#${channel.id}>`,
+        content: `Your ticket has been created: <#${channel.id}> (Ticket #${ticketNumber})`,
         ephemeral: true
       });
     } catch (error) {
-      console.error('Error creating ticket:', error);
       return interaction.reply({
         content: 'There was an error creating your ticket. Please try again later.',
         ephemeral: true
       });
     }
   }
-  
-  // Handle ticket closing button
   if (interaction.customId === 'close_ticket') {
     try {
       const guildId = interaction.guild.id;
       const channelId = interaction.channel.id;
-      
-      // Find the user who owns this ticket
-      let ticketOwnerUserId = null;
+      let ticketNumber = null;
       if (activeTickets[guildId]) {
-        for (const userId in activeTickets[guildId]) {
-          if (activeTickets[guildId][userId].channelId === channelId) {
-            ticketOwnerUserId = userId;
+        for (const tNum in activeTickets[guildId]) {
+          if (activeTickets[guildId][tNum].channelId === channelId) {
+            ticketNumber = tNum;
             break;
           }
         }
       }
-      
-      if (ticketOwnerUserId) {
-        // Update the ticket status
-        activeTickets[guildId][ticketOwnerUserId].status = 'closed';
-        
-        // Send a message indicating the ticket is closed
+      if (ticketNumber) {
+        activeTickets[guildId][ticketNumber].status = 'closed';
+        activeTickets[guildId][ticketNumber].lastUpdated = new Date();
         await interaction.reply({
           content: 'This ticket has been closed. The channel will be deleted in 5 seconds...',
         });
-        
-        // Wait 5 seconds before deleting the channel
         setTimeout(async () => {
           try {
             await interaction.channel.delete();
-            // You might want to create a log of this ticket somewhere
-            delete activeTickets[guildId][ticketOwnerUserId];
-          } catch (err) {
-            console.error('Error deleting channel:', err);
-          }
+          } catch (err) {}
         }, 5000);
       } else {
         await interaction.reply({
@@ -365,7 +303,6 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
     } catch (error) {
-      console.error('Error closing ticket:', error);
       await interaction.reply({
         content: 'There was an error closing this ticket.',
       });
@@ -374,7 +311,6 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // Start the Express server
-// Changed default port to 4000 to avoid conflicts
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
