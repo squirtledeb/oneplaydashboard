@@ -134,7 +134,9 @@ function renderDashboard() {
       <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '50px'}">
         <div class="p-3">
           <button onclick="toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
-            <span>${isCollapsibleOpen ? '⬅️' : '➡️'}</span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
+            </svg>
           </button>
           <div class="mt-4 ${isCollapsibleOpen ? 'block' : 'hidden'}">
             <h3 class="text-lg font-semibold mb-3">Quick Options</h3>
