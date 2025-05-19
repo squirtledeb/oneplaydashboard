@@ -1,5 +1,5 @@
 // =====================
-// DASHBOARD.JS (FULL VERSION WITH DEPLOY EMBED FUNCTIONALITY AND INLINE SUCCESS/ERROR MESSAGE)
+// DASHBOARD.JS (FULL VERSION, FIXED DEPLOY EMBED PAYLOAD STRUCTURE)
 // =====================
 
 // --- CONFIGURATION ---
@@ -112,16 +112,13 @@ function deployEmbed() {
     showDeployMessage('Please fill in all embed fields.', false);
     return;
   }
-  // Prepare payload
+  // Prepare payload (FLATTENED, NOT NESTED)
   const payload = {
-    guildId: connectedGuildId,
     channelId: selectedChannelId,
-    embed: {
-      title: embedTitle,
-      description: embedDescription,
-      buttonLabel: embedButtonLabel,
-      color: embedColor
-    }
+    title: embedTitle,
+    description: embedDescription,
+    buttonLabel: embedButtonLabel,
+    color: embedColor
   };
   fetch(`${API_BASE}/api/deploy-embed`, {
     method: 'POST',
