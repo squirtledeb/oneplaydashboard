@@ -44,10 +44,91 @@ const client = new Client({
   ]
 });
 
+const fs = require('fs');
+const path = require('path');
+
 // Bot state management
 let connectedGuilds = [];
 let ticketChannels = {};
 let activeTickets = {};
+
+// File paths for persistence
+const DATA_DIR = path.join(__dirname, 'data');
+const TICKET_CHANNELS_FILE = path.join(DATA_DIR, 'ticketChannels.json');
+const ACTIVE_TICKETS_FILE = path.join(DATA_DIR, 'activeTickets.json');
+
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+
+// Load persisted data
+function loadData() {
+  try {
+    if (fs.existsSync(TICKET_CHANNELS_FILE)) {
+      const data = fs.readFileSync(TICKET_CHANNELS_FILE, 'utf-8');
+      ticketChannels = JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Error loading ticketChannels:', err);
+  }
+  try {
+    if (fs.existsSync(ACTIVE_TICKETS_FILE)) {
+      const data = fs.readFileSync(ACTIVE_TICKETS_FILE, 'utf-8');
+      activeTickets = JSON.parse(data);
+    }
+  } catch (err) {
+    console.error('Error loading activeTickets:', err);
+  }
+}
+
+// Save data to files
+function saveData() {
+  try {
+    fs.writeFileSync(TICKET_CHANNELS_FILE, JSON.stringify(ticketChannels, null, 2));
+  } catch (err) {
+    console.error('Error saving ticketChannels:', err);
+  }
+  try {
+    fs.writeFileSync(ACTIVE_TICKETS_FILE, JSON.stringify(activeTickets, null, 2));
+  } catch (err) {
+    console.error('Error saving activeTickets:', err);
+  }
+}
+
+  
+// Load data on startup
+loadData();
+
+client.once('ready', async () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+  await refreshTicketChannels();
+});
+
+// Function to validate and refresh ticketChannels on startup
+async function refreshTicketChannels() {
+  for (const guildId in ticketChannels) {
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) {
+      console.log(`Guild ${guildId} not found in cache, removing from ticketChannels`);
+      delete ticketChannels[guildId];
+      continue;
+    }
+    const validChannels = [];
+    for (const channelId of ticketChannels[guildId]) {
+      try {
+        const channel = await guild.channels.fetch(channelId);
+        if (channel) {
+          validChannels.push(channelId);
+        }
+      } catch (err) {
+        console.log(`Channel ${channelId} not found in guild ${guildId}, removing from ticketChannels`);
+      }
+    }
+    ticketChannels[guildId] = validChannels;
+  }
+  saveData();
+}
 
 // Discord bot token from environment variable
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -60,6 +141,7 @@ app.get('/api/guilds', (req, res) => {
     name: guild.name
   }));
   console.log('[API] /api/guilds called. Current guilds:', connectedGuilds.map(g => g.name).join(', '));
+  console.log('[API] /api/guilds raw guild cache:', client.guilds.cache.map(g => g.name));
   res.json(connectedGuilds);
 });
 
@@ -93,8 +175,8 @@ app.post('/api/deploy-embed', async (req, res) => {
     const embed = new EmbedBuilder()
       .setTitle(title)
       .setDescription(description)
-      .setColor(color)
-      .setTimestamp();
+      .setColor(color);
+      // Removed timestamp as per request
     
     const row = new ActionRowBuilder()
       .addComponents(
@@ -106,14 +188,15 @@ app.post('/api/deploy-embed', async (req, res) => {
     
     await channel.send({ embeds: [embed], components: [row] });
     
-    // Store this channel as a ticket channel
-    const guildId = channel.guild.id;
-    if (!ticketChannels[guildId]) {
-      ticketChannels[guildId] = [];
-    }
-    ticketChannels[guildId].push(channelId);
-    
-    res.json({ success: true });
+// Store this channel as a ticket channel
+const guildId = channel.guild.id;
+if (!ticketChannels[guildId]) {
+  ticketChannels[guildId] = [];
+}
+ticketChannels[guildId].push(channelId);
+saveData();
+
+res.json({ success: true });
   } catch (error) {
     console.error('Error deploying embed:', error);
     res.status(500).json({ error: 'Failed to deploy embed' });
@@ -208,39 +291,40 @@ client.on('interactionCreate', async (interaction) => {
         ]
       });
       
-      // Store the active ticket
-      if (!activeTickets[guildId]) activeTickets[guildId] = {};
-      activeTickets[guildId][userId] = {
-        channelId: channel.id,
-        createdAt: new Date(),
-        status: 'active'
-      };
+// Store the active ticket
+if (!activeTickets[guildId]) activeTickets[guildId] = {};
+activeTickets[guildId][userId] = {
+  channelId: channel.id,
+  createdAt: new Date(),
+  status: 'active'
+};
+saveData();
       
-      // Send initial message in the ticket channel
-      const embed = new EmbedBuilder()
-        .setTitle('Support Ticket')
-        .setDescription(`Hello ${interaction.user}, support staff will be with you shortly.`)
-        .setColor('#5865F2')
-        .setTimestamp();
+// Send initial message in the ticket channel
+const embed = new EmbedBuilder()
+  .setTitle('Support Ticket')
+  .setDescription(`Hello ${interaction.user}, support staff will be with you shortly.`)
+  .setColor('#5865F2')
+  .setTimestamp();
       
-      const closeButton = new ActionRowBuilder()
-        .addComponents(
-          new ButtonBuilder()
-            .setCustomId('close_ticket')
-            .setLabel('Close Ticket')
-            .setStyle(ButtonStyle.Danger)
-        );
+const closeButton = new ActionRowBuilder()
+  .addComponents(
+    new ButtonBuilder()
+      .setCustomId('close_ticket')
+      .setLabel('Close Ticket')
+      .setStyle(ButtonStyle.Danger)
+  );
       
-      await channel.send({ 
-        embeds: [embed],
-        components: [closeButton]
-      });
+await channel.send({ 
+  embeds: [embed],
+  components: [closeButton]
+});
       
-      // Notify the user that the ticket was created
-      return interaction.reply({
-        content: `Your ticket has been created: <#${channel.id}>`,
-        ephemeral: true
-      });
+// Notify the user that the ticket was created
+return interaction.reply({
+  content: `Your ticket has been created: <#${channel.id}>`,
+  ephemeral: true
+});
     } catch (error) {
       console.error('Error creating ticket:', error);
       return interaction.reply({
@@ -271,10 +355,9 @@ client.on('interactionCreate', async (interaction) => {
         // Update the ticket status
         activeTickets[guildId][ticketOwnerUserId].status = 'closed';
         
-        // Send a message indicating the ticket is closed
-        await interaction.reply({
-          content: 'This ticket has been closed. The channel will be deleted in 5 seconds...',
-        });
+        // Send a message indicating the ticket is closed in the channel (not as interaction reply)
+        await interaction.channel.send('This ticket has been closed. The channel will be deleted in 5 seconds...');
+        await interaction.deferUpdate();
         
         // Wait 5 seconds before deleting the channel
         setTimeout(async () => {

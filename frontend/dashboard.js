@@ -3,6 +3,7 @@
 // --- State Management ---
 let isCollapsibleOpen = false;
 let currentView = localStorage.getItem('currentView') || 'login';
+
 let currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'default';
 let discordConnected = false;
 let connectedServer = '';
@@ -34,28 +35,60 @@ function setupWebSocket() {
 }
 setupWebSocket();
 
-// --- App Initialization ---
-document.addEventListener('DOMContentLoaded', () => {
-  renderView();
-  setInterval(() => {
-    fetch('/api/guilds')
-      .then(res => res.json())
-      .then(guilds => {
-        if (guilds && guilds.length > 0) {
-          discordConnected = true;
-          connectedServer = guilds[0].name;
-        } else {
-          discordConnected = false;
-          connectedServer = '';
-        }
-        renderView();
-      })
-      .catch(() => {});
-  }, 5000);
-});
+const BACKEND_URL = 'http://localhost:4000';
 
-// --- Main Render Function ---
+async function checkBotConnection() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/guilds`);
+    const text = await res.text();
+    try {
+      const guilds = JSON.parse(text);
+      console.log('checkBotConnection guilds:', guilds);
+      if (guilds && guilds.length > 0) {
+        discordConnected = true;
+        connectedServer = guilds[0].name;
+        await fetchChannelsForGuild(guilds[0].id);
+      } else {
+        discordConnected = false;
+        connectedServer = '';
+        availableChannels = [];
+      }
+      console.log('discordConnected:', discordConnected, 'connectedServer:', connectedServer);
+    } catch (jsonError) {
+      console.error('JSON parse error in checkBotConnection:', jsonError, 'Response text:', text);
+      discordConnected = false;
+      connectedServer = '';
+      availableChannels = [];
+    }
+  } catch (error) {
+    discordConnected = false;
+    connectedServer = '';
+    availableChannels = [];
+    console.error('checkBotConnection error:', error);
+  }
+  if (!isUserInteracting) {
+    // Preserve currentView and currentSidebarContent from localStorage to avoid reset
+    currentView = localStorage.getItem('currentView') || currentView;
+    currentSidebarContent = localStorage.getItem('currentSidebarContent') || currentSidebarContent;
+    renderView();
+  }
+}
+
+async function fetchChannelsForGuild(guildId) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/channels/${guildId}`);
+    const channels = await res.json();
+    availableChannels = channels;
+    console.log('Fetched channels for guild:', guildId, channels);
+  } catch (error) {
+    availableChannels = [];
+    console.error('Error fetching channels:', error);
+  }
+  renderView();
+}
+
 function renderView() {
+  console.log('Rendering view with discordConnected:', discordConnected, 'connectedServer:', connectedServer);
   localStorage.setItem('currentView', currentView);
   localStorage.setItem('currentSidebarContent', currentSidebarContent);
   if (currentView === 'login') {
@@ -64,6 +97,89 @@ function renderView() {
     renderDashboard();
   }
 }
+
+// New function to render main dashboard welcome area
+function renderDashboardMain() {
+  document.getElementById('app').innerHTML = `
+    <div class="flex h-screen">
+      <div class="bg-gray-800 text-white w-64 flex-shrink-0 h-full flex flex-col justify-between">
+        <div>
+          <div class="p-4">
+            <h2 class="text-xl font-bold mb-6">Dashboard</h2>
+            <nav>
+              <ul>
+                <li>
+                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="showAnalytics(event)">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17a4 4 0 100-8 4 4 0 000 8z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6"></path>
+                    </svg>
+                    Analytics
+                  </a>
+                </li>
+                <li class="mb-2">
+                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="showTicketsOptions(event)">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
+                    </svg>
+                    Tickets
+                  </a>
+                </li>
+                <li>
+                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="showSettingsOptions(event)">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Settings
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+        <div class="p-4 mb-4">
+          <button onclick="logout()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+            Logout
+          </button>
+        </div>
+      </div>
+      <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '50px'}">
+        <div class="p-3">
+          <button onclick="toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
+            </svg>
+          </button>
+          <div class="mt-4 ${isCollapsibleOpen ? 'block' : 'hidden'}">
+            <h3 class="text-lg font-semibold mb-3">Quick Options</h3>
+            <ul id="sidebarOptions">
+              ${getSidebarContent()}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="flex-1 p-8 overflow-auto">
+        <div class="bg-white rounded-lg shadow-md p-6">
+          ${renderDashboardContent()}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// --- App Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+  renderView();
+  // Initial check for bot connection
+  checkBotConnection();
+  // Periodic check every 10 seconds, but only if user is not interacting and not on botSetup page
+  setInterval(() => {
+    if (!isUserInteracting && currentView !== 'botSetup') {
+      checkBotConnection();
+    }
+  }, 10000);
+});
 
 // --- Login Page ---
 function renderLogin() {
@@ -90,7 +206,7 @@ function renderLogin() {
 }
 function handleLogin(event) {
   event.preventDefault();
-  currentView = 'dashboard';
+  currentView = 'analytics'; // Set landing page to analytics after login
   renderView();
 }
 
@@ -104,6 +220,15 @@ function renderDashboard() {
             <h2 class="text-xl font-bold mb-6">Dashboard</h2>
             <nav>
               <ul>
+                <li>
+                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="showAnalytics(event)">
+                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 17a4 4 0 100-8 4 4 0 000 8z"></path>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6"></path>
+                    </svg>
+                    Analytics
+                  </a>
+                </li>
                 <li class="mb-2">
                   <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="showTicketsOptions(event)">
                     <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -150,12 +275,131 @@ function renderDashboard() {
         <div class="bg-white rounded-lg shadow-md p-6">
           ${currentView === 'integrations' ? renderIntegrationsContent() :
             currentView === 'botSetup' ? renderBotSetup() :
+            currentView === 'analytics' ? renderAnalyticsContent() :
             renderDashboardContent()}
         </div>
       </div>
     </div>
   `;
 }
+
+function showAnalytics(event) {
+  event.preventDefault();
+  currentView = 'analytics';
+  renderView();
+}
+
+function renderAnalyticsContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Analytics</h1>
+    <p class="mb-6 text-gray-600">Overview of ticket statuses and recent activity.</p>
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
+        <p id="activeTicketsCount" class="text-3xl font-bold text-blue-600">0</p>
+      </div>
+      <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+        <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
+        <p id="resolvedTodayCount" class="text-3xl font-bold text-green-600">0</p>
+      </div>
+      <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
+        <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
+        <p id="newMessagesCount" class="text-3xl font-bold text-purple-600">0</p>
+      </div>
+    </div>
+    <div class="mt-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Activity</h2>
+      <div class="border rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="recentTicketsBody" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// Utility function to format time difference
+function formatTimeDiff(dateString) {
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffMs = now - past;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} days ago`;
+}
+
+// Fetch and update analytics data
+async function updateAnalyticsData() {
+  try {
+    const res = await fetch('/api/tickets');
+    const tickets = await res.json();
+    const statusSummary = { active: 0, resolved: 0, newMessages: 0 };
+    let resolvedTodayCount = 0;
+    let now = new Date();
+    tickets.forEach(ticket => {
+      // Count statuses
+      if (ticket.status.toLowerCase() === 'active') statusSummary.active++;
+      if (ticket.status.toLowerCase() === 'resolved') statusSummary.resolved++;
+      // Count new messages (assuming a field 'newMessages' or similar)
+      if (ticket.newMessages) statusSummary.newMessages += ticket.newMessages;
+
+      // Count resolved today
+      if (ticket.status.toLowerCase() === 'resolved') {
+        const createdAt = new Date(ticket.createdAt);
+        if (createdAt.toDateString() === now.toDateString()) {
+          resolvedTodayCount++;
+        }
+      }
+    });
+
+    // Update counts in UI
+    document.getElementById('activeTicketsCount').textContent = statusSummary.active;
+    document.getElementById('resolvedTodayCount').textContent = resolvedTodayCount;
+    document.getElementById('newMessagesCount').textContent = statusSummary.newMessages;
+
+    // Update recent tickets table
+    const recentTicketsBody = document.getElementById('recentTicketsBody');
+    recentTicketsBody.innerHTML = '';
+    tickets.forEach(ticket => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.channelId}</td>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.userName || 'Unknown'}</td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            ticket.status.toLowerCase() === 'resolved' ? 'bg-green-100 text-green-800' :
+            ticket.status.toLowerCase() === 'in progress' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }">${ticket.status}</span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">${formatTimeDiff(ticket.createdAt)}</td>
+      `;
+      recentTicketsBody.appendChild(tr);
+    });
+  } catch (error) {
+    console.error('Error fetching analytics data:', error);
+  }
+}
+
+// Update analytics data every 10 seconds if on analytics page
+setInterval(() => {
+  if (currentView === 'analytics') {
+    updateAnalyticsData();
+  }
+}, 10000);
 
 // --- Sidebar & Navigation ---
 function toggleCollapsible() {
@@ -188,7 +432,7 @@ function showBotSettings(event) {
   renderView();
 }
 function goBackToDashboard() {
-  currentView = 'dashboard';
+  currentView = 'analytics'; // Redirect to analytics tab as main dashboard
   renderView();
 }
 function getSidebarContent() {
@@ -304,7 +548,46 @@ function renderIntegrationsContent() {
   `;
 }
 function connectDiscord() {
-  window.open('https://discord.com/oauth2/authorize?client_id=1372610090888069190&permissions=8&scope=bot', '_blank');
+  const oauthWindow = window.open('https://discord.com/oauth2/authorize?client_id=1372610090888069190&permissions=8&scope=bot', '_blank');
+
+  // Polling to detect when the OAuth window is closed
+  const pollTimer = setInterval(() => {
+    if (oauthWindow.closed) {
+      clearInterval(pollTimer);
+      // Refresh guild list after OAuth window closes
+      fetch('/api/guilds')
+        .then(res => res.json())
+        .then(guilds => {
+          if (guilds && guilds.length > 0) {
+            discordConnected = true;
+            connectedServer = guilds[0].name;
+            // Also fetch channels for the connected guild to update availableChannels
+            fetch(`/api/channels/${guilds[0].id}`)
+              .then(res => res.json())
+              .then(channels => {
+                availableChannels = channels;
+                renderView();
+              })
+              .catch(() => {
+                availableChannels = [];
+                renderView();
+              });
+          } else {
+            discordConnected = false;
+            connectedServer = '';
+            availableChannels = [];
+            renderView();
+          }
+          renderView();
+        })
+        .catch(() => {
+          discordConnected = false;
+          connectedServer = '';
+          availableChannels = [];
+          renderView();
+        });
+    }
+  }, 1000);
 }
 function disconnectDiscord() {
   discordConnected = false;
@@ -385,6 +668,8 @@ function previewEmbed() {
   `;
   previewContainer.classList.remove('hidden');
 }
+let isUserInteracting = false;
+
 function deployEmbed() {
   const channelId = document.getElementById('channelSelect').value;
   const title = document.getElementById('embedTitle').value;
@@ -395,7 +680,7 @@ function deployEmbed() {
     alert('Please select a channel.');
     return;
   }
-  fetch('/api/deploy-embed', {
+  fetch(`${BACKEND_URL}/api/deploy-embed`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ channelId, title, description, buttonLabel, color })
@@ -412,6 +697,18 @@ function deployEmbed() {
       alert('An error occurred while deploying the embed.');
     });
 }
+
+// Pause periodic refresh when user interacts with form inputs
+document.addEventListener('focusin', (event) => {
+  if (event.target.closest('#embedTitle, #embedDescription, #buttonLabel, #embedColor, #channelSelect')) {
+    isUserInteracting = true;
+  }
+});
+document.addEventListener('focusout', (event) => {
+  if (event.target.closest('#embedTitle, #embedDescription, #buttonLabel, #embedColor, #channelSelect')) {
+    isUserInteracting = false;
+  }
+});
 
 // --- Tickets Sidebar Option Handlers (placeholders) ---
 function showAllTickets(event) { event.preventDefault(); alert('Show all tickets (not implemented)'); }
