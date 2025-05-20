@@ -112,6 +112,7 @@ const path = require('path');
 let connectedGuilds = [];
 let ticketChannels = {};
 let activeTickets = {};
+let lastTicketNumbers = {};
 
 // File paths for persistence
 const DATA_DIR = path.join(__dirname, 'data');
@@ -122,6 +123,8 @@ const ACTIVE_TICKETS_FILE = path.join(DATA_DIR, 'activeTickets.json');
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR);
 }
+
+let LAST_TICKET_NUMBERS_FILE = path.join(DATA_DIR, 'lastTicketNumbers.json');
 
 // Load persisted data
 function loadData() {
@@ -151,8 +154,22 @@ function loadData() {
     console.error('Error loading activeTickets:', err);
     activeTickets = {};
   }
+  try {
+    if (fs.existsSync(LAST_TICKET_NUMBERS_FILE)) {
+      const data = fs.readFileSync(LAST_TICKET_NUMBERS_FILE, 'utf-8').trim();
+      if (data) {
+        lastTicketNumbers = JSON.parse(data);
+      } else {
+        lastTicketNumbers = {};
+      }
+    }
+  } catch (err) {
+    console.error('Error loading lastTicketNumbers:', err);
+    lastTicketNumbers = {};
+  }
 }
 
+  
 // Save data to files
 function saveData() {
   try {
@@ -164,6 +181,11 @@ function saveData() {
     fs.writeFileSync(ACTIVE_TICKETS_FILE, JSON.stringify(activeTickets, null, 2));
   } catch (err) {
     console.error('Error saving activeTickets:', err);
+  }
+  try {
+    fs.writeFileSync(LAST_TICKET_NUMBERS_FILE, JSON.stringify(lastTicketNumbers, null, 2));
+  } catch (err) {
+    console.error('Error saving lastTicketNumbers:', err);
   }
 }
 
@@ -325,21 +347,33 @@ client.on('guildCreate', (guild) => {
 });
 
 function generateUniqueTicketNumber(guild) {
-  const existingNumbers = new Set();
-  guild.channels.cache.forEach(channel => {
-    const match = channel.name.match(/^ticket-(\d{4})$/);
-    if (match) {
-      existingNumbers.add(match[1]);
-    }
-  });
+  if (!lastTicketNumbers[guild.id]) {
+    lastTicketNumbers[guild.id] = -1;
+  }
+  let nextNumber = lastTicketNumbers[guild.id] + 1;
+  const usedNumbers = new Set();
 
-  for (let i = 0; i <= 9999; i++) {
-    const numberStr = i.toString().padStart(4, '0');
-    if (!existingNumbers.has(numberStr)) {
-      return numberStr;
+  // Collect all used ticket numbers in activeTickets for this guild
+  if (activeTickets[guild.id]) {
+    for (const userId in activeTickets[guild.id]) {
+      const ticket = activeTickets[guild.id][userId];
+      if (ticket.ticketNumber) {
+        usedNumbers.add(ticket.ticketNumber);
+      }
     }
   }
-  throw new Error('No available ticket numbers');
+
+  // Find next available ticket number not in usedNumbers
+  while (usedNumbers.has(nextNumber.toString().padStart(4, '0'))) {
+    nextNumber++;
+    if (nextNumber > 9999) {
+      throw new Error('No available ticket numbers');
+    }
+  }
+
+  lastTicketNumbers[guild.id] = nextNumber;
+  saveData();
+  return nextNumber.toString().padStart(4, '0');
 }
 
 // Removed duplicate function declaration to fix redeclaration error
