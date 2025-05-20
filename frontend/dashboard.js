@@ -610,11 +610,11 @@ function getSidebarContent() {
       <li><a href="#" class="block py-2 px-4 rounded cursor-default">Ticket Analytics</a></li>
     `;
   }
-  if (currentSidebarContent === 'tickets') {
+if (currentSidebarContent === 'tickets') {
     return `
       <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
-      <li><a href="#" onclick="showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Open Tickets</a></li>
-      <li><a href="#" onclick="showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Closed Tickets</a></li>
+      <li><a href="#" onclick="showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Active Tickets</a></li>
+      <li><a href="#" onclick="showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Resolved Tickets</a></li>
     `;
   } else if (currentSidebarContent === 'settings') {
     return `
@@ -884,7 +884,164 @@ document.addEventListener('focusout', (event) => {
   }
 });
 
-// --- Tickets Sidebar Option Handlers (placeholders) ---
-function showAllTickets(event) { event.preventDefault(); alert('Show all tickets (not implemented)'); }
-function showOpenTickets(event) { event.preventDefault(); alert('Show open tickets (not implemented)'); }
-function showClosedTickets(event) { event.preventDefault(); alert('Show closed tickets (not implemented)'); }
+let currentTicketsFilter = 'all';
+
+// --- Tickets Sidebar Option Handlers ---
+function showAllTickets(event) {
+  event.preventDefault();
+  currentTicketsFilter = 'all';
+  currentSidebarContent = 'tickets';
+  renderView();
+}
+
+function showOpenTickets(event) {
+  event.preventDefault();
+  currentTicketsFilter = 'active';
+  currentSidebarContent = 'tickets';
+  renderView();
+}
+
+function showClosedTickets(event) {
+  event.preventDefault();
+  currentTicketsFilter = 'resolved';
+  currentSidebarContent = 'tickets';
+  renderView();
+}
+
+// Render tickets list based on currentTicketsFilter
+function renderTicketsList() {
+  let filteredTickets = [];
+
+  for (const guildId in ticketsData) {
+    for (const userId in ticketsData[guildId]) {
+      const ticket = ticketsData[guildId][userId];
+      if (currentTicketsFilter === 'all' ||
+          (currentTicketsFilter === 'active' && ticket.status.toLowerCase() === 'active') ||
+          (currentTicketsFilter === 'resolved' && ticket.status.toLowerCase() === 'resolved')) {
+        filteredTickets.push(ticket);
+      }
+    }
+  }
+
+  if (filteredTickets.length === 0) {
+    return `<p class="text-gray-600">No tickets to display.</p>`;
+  }
+
+  let rowsHtml = filteredTickets.map(ticket => {
+    return `
+      <tr>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.ticketNumber || ticket.channelId || 'Unknown'}</td>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.userName || 'Unknown'}</td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            ticket.status && ticket.status.toLowerCase() === 'resolved' ? 'bg-green-100 text-green-800' :
+            ticket.status && ticket.status.toLowerCase() === 'in progress' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }">${ticket.status || 'Unknown'}</span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.createdAt ? formatTimeDiff(ticket.createdAt) : 'Unknown'}</td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Tickets</h1>
+    <table class="min-w-full divide-y divide-gray-200">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+        </tr>
+      </thead>
+      <tbody class="bg-white divide-y divide-gray-200">
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+}
+
+// Update getSidebarContent to include tickets tabs
+function getSidebarContent() {
+  if (currentView === 'analytics') {
+    return `
+      <li><a href="#" class="block py-2 px-4 rounded cursor-default">Ticket Analytics</a></li>
+    `;
+  }
+  if (currentSidebarContent === 'tickets') {
+    return `
+      <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
+      <li><a href="#" onclick="showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Active Tickets</a></li>
+      <li><a href="#" onclick="showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Resolved Tickets</a></li>
+    `;
+  } else if (currentSidebarContent === 'settings') {
+    return `
+      <li><a href="#" onclick="showIntegrations(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Integrations</a></li>
+      <li><a href="#" onclick="showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Bot Settings</a></li>
+    `;
+  }
+  return `<li class="text-gray-700">No quick options available.</li>`;
+}
+
+// Modify renderDashboardContent to render tickets list if in tickets tab
+function renderDashboardContent() {
+  if (currentSidebarContent === 'tickets') {
+    return renderTicketsList();
+  }
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to your Dashboard</h1>
+    <p class="mb-4 text-gray-600">This is your main dashboard area. Select an option from the sidebars to navigate.</p>
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
+        <p class="text-3xl font-bold text-blue-600">12</p>
+      </div>
+      <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+        <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
+        <p class="text-3xl font-bold text-green-600">5</p>
+      </div>
+      <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
+        <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
+        <p class="text-3xl font-bold text-purple-600">3</p>
+      </div>
+    </div>
+    <div class="mt-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Activity</h2>
+      <div class="border rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+            </tr>
+          </thead>
+          <tbody class="bg-white divide-y divide-gray-200">
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">Ticket #1234</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Resolved</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2 hours ago</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">Ticket #1235</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">In Progress</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">5 hours ago</td>
+            </tr>
+            <tr>
+              <td class="px-6 py-4 whitespace-nowrap">Ticket #1236</td>
+              <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Active</span>
+              </td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">1 day ago</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}

@@ -1,16 +1,16 @@
 {
   "1372301980344783038": {
-    "729552743433502722": {
-      "channelId": "1374475349152235631",
-      "ticketNumber": "0002",
-      "createdAt": "2025-05-20T19:54:20.265Z",
-      "status": "resolved"
-    },
     "361074999810981888": {
-      "channelId": "1374474767708455015",
-      "ticketNumber": "0000",
-      "createdAt": "2025-05-20T19:52:01.401Z",
-      "status": "resolved"
+      "channelId": "1374497775760183458",
+      "ticketNumber": "0006",
+      "createdAt": "2025-05-20T21:23:26.947Z",
+      "status": "active"
+    },
+    "1007555418354110524": {
+      "channelId": "1374498124256510134",
+      "ticketNumber": "0008",
+      "createdAt": "2025-05-20T21:24:50.089Z",
+      "status": "active"
     }
   }
 }
