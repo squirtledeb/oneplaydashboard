@@ -34,7 +34,6 @@ function broadcastUpdate(data) {
   });
 }
 
-// Initialize Discord bot
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -42,6 +41,67 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMessageReactions
   ]
+});
+
+// Function to get tickets with user names
+const getTicketsWithUserNames = () => {
+  const ticketsWithUserNames = {};
+  for (const guildId in activeTickets) {
+    ticketsWithUserNames[guildId] = {};
+    const guild = client.guilds.cache.get(guildId);
+    for (const userId in activeTickets[guildId]) {
+      const ticket = activeTickets[guildId][userId];
+      let userName = 'Unknown';
+      let ticketNumber = 'Unknown';
+      if (guild) {
+        const member = guild.members.cache.get(userId);
+        if (member) {
+          userName = member.user.username;
+        }
+        try {
+          const channel = guild.channels.cache.get(ticket.channelId);
+          if (channel) {
+            const match = channel.name.match(/^ticket-(\d{4})$/);
+            if (match) {
+              ticketNumber = match[1];
+            }
+          }
+        } catch (err) {
+          console.error('Error fetching channel for ticket number:', err);
+        }
+      }
+      ticketsWithUserNames[guildId][userId] = {
+        ...ticket,
+        userName,
+        ticketNumber
+      };
+    }
+  }
+  return ticketsWithUserNames;
+};
+
+// Listen for new messages in ticket channels to update last updated timestamp
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return; // Ignore bot messages
+  const guildId = message.guild?.id;
+  if (!guildId) return;
+  const userId = message.author.id;
+  if (!activeTickets[guildId]) return;
+  // Find if the message channel is an active ticket channel
+  for (const uid in activeTickets[guildId]) {
+    const ticket = activeTickets[guildId][uid];
+    if (ticket.channelId === message.channel.id) {
+      // Update last updated timestamp
+      ticket.createdAt = new Date();
+      saveData();
+      // Broadcast updated tickets to clients
+      broadcastUpdate({
+        type: 'TICKET_UPDATE',
+        tickets: getTicketsWithUserNames()
+      });
+      break;
+    }
+  }
 });
 
 const fs = require('fs');
@@ -66,19 +126,29 @@ if (!fs.existsSync(DATA_DIR)) {
 function loadData() {
   try {
     if (fs.existsSync(TICKET_CHANNELS_FILE)) {
-      const data = fs.readFileSync(TICKET_CHANNELS_FILE, 'utf-8');
-      ticketChannels = JSON.parse(data);
+      const data = fs.readFileSync(TICKET_CHANNELS_FILE, 'utf-8').trim();
+      if (data) {
+        ticketChannels = JSON.parse(data);
+      } else {
+        ticketChannels = {};
+      }
     }
   } catch (err) {
     console.error('Error loading ticketChannels:', err);
+    ticketChannels = {};
   }
   try {
     if (fs.existsSync(ACTIVE_TICKETS_FILE)) {
-      const data = fs.readFileSync(ACTIVE_TICKETS_FILE, 'utf-8');
-      activeTickets = JSON.parse(data);
+      const data = fs.readFileSync(ACTIVE_TICKETS_FILE, 'utf-8').trim();
+      if (data) {
+        activeTickets = JSON.parse(data);
+      } else {
+        activeTickets = {};
+      }
     }
   } catch (err) {
     console.error('Error loading activeTickets:', err);
+    activeTickets = {};
   }
 }
 
@@ -253,94 +323,112 @@ client.on('guildCreate', (guild) => {
   });
 });
 
-// Handle button interactions for ticket creation
+function generateUniqueTicketNumber(guild) {
+  const existingNumbers = new Set();
+  guild.channels.cache.forEach(channel => {
+    const match = channel.name.match(/^ticket-(\d{4})$/);
+    if (match) {
+      existingNumbers.add(match[1]);
+    }
+  });
+
+  for (let i = 0; i <= 9999; i++) {
+    const numberStr = i.toString().padStart(4, '0');
+    if (!existingNumbers.has(numberStr)) {
+      return numberStr;
+    }
+  }
+  throw new Error('No available ticket numbers');
+}
+
+// Removed duplicate function declaration to fix redeclaration error
+
+// Handle button interactions for ticket creation and closing
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
-  
-  // Handle ticket creation button
+
   if (interaction.customId === 'create_ticket') {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
-    
-    // Check if user already has an open ticket
+
     if (activeTickets[guildId] && activeTickets[guildId][userId]) {
       return interaction.reply({
         content: `You already have an open ticket. Please use that one.`,
         ephemeral: true
       });
     }
-    
+
     try {
-      // Create a new ticket channel
+      await interaction.deferReply({ ephemeral: true }); // Acknowledge interaction early
+
+      const ticketNumber = generateUniqueTicketNumber(interaction.guild);
       const channel = await interaction.guild.channels.create({
-        name: `ticket-${interaction.user.username}`,
-        type: 0, // Text channel
+        name: `ticket-${ticketNumber}`,
+        type: 0,
         permissionOverwrites: [
           {
-            id: interaction.guild.id, // @everyone role
+            id: interaction.guild.id,
             deny: ['ViewChannel']
           },
           {
-            id: userId, // Ticket creator
+            id: userId,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
           },
           {
-            id: client.user.id, // Bot
+            id: client.user.id,
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
           }
         ]
       });
-      
-// Store the active ticket
-if (!activeTickets[guildId]) activeTickets[guildId] = {};
-activeTickets[guildId][userId] = {
-  channelId: channel.id,
-  createdAt: new Date(),
-  status: 'active'
-};
-saveData();
-      
-// Send initial message in the ticket channel
-const embed = new EmbedBuilder()
-  .setTitle('Support Ticket')
-  .setDescription(`Hello ${interaction.user}, support staff will be with you shortly.`)
-  .setColor('#5865F2')
-  .setTimestamp();
-      
-const closeButton = new ActionRowBuilder()
-  .addComponents(
-    new ButtonBuilder()
-      .setCustomId('close_ticket')
-      .setLabel('Close Ticket')
-      .setStyle(ButtonStyle.Danger)
-  );
-      
-await channel.send({ 
-  embeds: [embed],
-  components: [closeButton]
-});
-      
-// Notify the user that the ticket was created
-return interaction.reply({
-  content: `Your ticket has been created: <#${channel.id}>`,
-  ephemeral: true
-});
+
+      if (!activeTickets[guildId]) activeTickets[guildId] = {};
+      activeTickets[guildId][userId] = {
+        channelId: channel.id,
+        createdAt: new Date(),
+        status: 'active'
+      };
+      saveData();
+
+      broadcastUpdate({
+        type: 'TICKET_UPDATE',
+        tickets: getTicketsWithUserNames()
+      });
+
+      const embed = new EmbedBuilder()
+        .setTitle('Support Ticket')
+        .setDescription(`Hello ${interaction.user}, support staff will be with you shortly.`)
+        .setColor('#5865F2')
+        .setTimestamp();
+
+      const closeButton = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('close_ticket')
+            .setLabel('Close Ticket')
+            .setStyle(ButtonStyle.Danger)
+        );
+
+      await channel.send({
+        embeds: [embed],
+        components: [closeButton]
+      });
+
+      return interaction.editReply({
+        content: `Your ticket has been created: <#${channel.id}>`
+      });
     } catch (error) {
       console.error('Error creating ticket:', error);
-      return interaction.reply({
-        content: 'There was an error creating your ticket. Please try again later.',
-        ephemeral: true
+      return interaction.editReply({
+        content: 'There was an error creating your ticket. Please try again later.'
       });
     }
   }
-  
-  // Handle ticket closing button
+
   if (interaction.customId === 'close_ticket') {
     try {
       const guildId = interaction.guild.id;
       const channelId = interaction.channel.id;
-      
-      // Find the user who owns this ticket
+
       let ticketOwnerUserId = null;
       if (activeTickets[guildId]) {
         for (const userId in activeTickets[guildId]) {
@@ -350,34 +438,35 @@ return interaction.reply({
           }
         }
       }
-      
+
       if (ticketOwnerUserId) {
-        // Update the ticket status
-        activeTickets[guildId][ticketOwnerUserId].status = 'closed';
-        
-        // Send a message indicating the ticket is closed in the channel (not as interaction reply)
-        await interaction.channel.send('This ticket has been closed. The channel will be deleted in 5 seconds...');
-        await interaction.deferUpdate();
-        
-        // Wait 5 seconds before deleting the channel
-        setTimeout(async () => {
-          try {
-            await interaction.channel.delete();
-            // You might want to create a log of this ticket somewhere
-            delete activeTickets[guildId][ticketOwnerUserId];
-          } catch (err) {
-            console.error('Error deleting channel:', err);
-          }
-        }, 5000);
+        activeTickets[guildId][ticketOwnerUserId].status = 'resolved';
+
+        broadcastUpdate({
+          type: 'TICKET_UPDATE',
+          tickets: getTicketsWithUserNames()
+        });
+
+        await interaction.channel.delete();
+
+        // Do not delete the ticket immediately to allow frontend to show resolved tickets
+        // delete activeTickets[guildId][ticketOwnerUserId];
+
+        broadcastUpdate({
+          type: 'TICKET_UPDATE',
+          tickets: getTicketsWithUserNames()
+        });
       } else {
         await interaction.reply({
           content: 'Unable to find ticket information. Please close it manually.',
+          ephemeral: true
         });
       }
     } catch (error) {
       console.error('Error closing ticket:', error);
       await interaction.reply({
         content: 'There was an error closing this ticket.',
+        ephemeral: true
       });
     }
   }

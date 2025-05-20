@@ -9,6 +9,20 @@ let discordConnected = false;
 let connectedServer = '';
 let availableChannels = [];
 
+function formatTimeDiff(dateString) {
+  const now = new Date();
+  const past = new Date(dateString);
+  const diffMs = now - past;
+  const diffSeconds = Math.floor(diffMs / 1000);
+  if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) return `${diffMinutes} minutes ago`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays} days ago`;
+}
+
 // --- WebSocket for instant integration updates ---
 let ws;
 function setupWebSocket() {
@@ -17,6 +31,7 @@ function setupWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+      console.log('WebSocket message received:', data);
       if (data.type === 'GUILD_UPDATE') {
         if (data.guilds && data.guilds.length > 0) {
           discordConnected = true;
@@ -25,15 +40,167 @@ function setupWebSocket() {
           discordConnected = false;
           connectedServer = '';
         }
+        console.log('Calling renderView from GUILD_UPDATE');
+        renderView();
+      }
+      if (data.type === 'TICKET_UPDATE') {
+        console.log('Received TICKET_UPDATE:', data.tickets);
+        console.log('Current ticketsData before update:', ticketsData);
+        // Update tickets data and refresh analytics and recent activity
+        updateTicketsData(data.tickets);
+        console.log('Updated ticketsData after update:', ticketsData);
+        console.log('Calling renderView from TICKET_UPDATE');
         renderView();
       }
     } catch (e) {
       console.error('WebSocket parse error:', e);
     }
   };
+  
+// Override renderView to add logging
+const originalRenderView = renderView;
+renderView = function() {
+  console.log('renderView called. currentView:', currentView, 'currentSidebarContent:', currentSidebarContent);
+  console.log('ticketsData at renderView:', ticketsData);
+  originalRenderView();
+};
+
+// Override renderAnalyticsContent to add logging
+const originalRenderAnalyticsContent = renderAnalyticsContent;
+renderAnalyticsContent = function() {
+  console.log('renderAnalyticsContent called. ticketsData:', ticketsData);
+  return originalRenderAnalyticsContent();
+};
   ws.onclose = () => setTimeout(setupWebSocket, 2000);
 }
 setupWebSocket();
+
+// Store tickets data locally
+let ticketsData = {};
+
+// Update tickets data and refresh UI
+function updateTicketsData(tickets) {
+  console.log('updateTicketsData called with tickets:', tickets);
+  // Remove resolved tickets from ticketsData to avoid conflict with new ticket creation
+  for (const guildId in tickets) {
+    for (const userId in tickets[guildId]) {
+      if (tickets[guildId][userId].status && tickets[guildId][userId].status.toLowerCase() === 'resolved') {
+        delete tickets[guildId][userId];
+      }
+    }
+  }
+  ticketsData = tickets;
+  console.log('ticketsData updated to:', ticketsData);
+  if (currentView === 'analytics') {
+    updateAnalyticsDataFromTickets(ticketsData);
+    updateRecentActivityTable(ticketsData);
+  }
+}
+
+// Override renderView to add logging
+const originalRenderView = renderView;
+renderView = function() {
+  console.log('renderView called. currentView:', currentView, 'currentSidebarContent:', currentSidebarContent);
+  originalRenderView();
+};
+
+// Modify renderAnalyticsContent to update analytics data after rendering
+function renderAnalyticsContent() {
+  const html = `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Analytics</h1>
+    <p class="mb-6 text-gray-600">Overview of ticket statuses and recent activity.</p>
+    <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
+        <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
+        <p id="activeTicketsCount" class="text-3xl font-bold text-blue-600">-</p>
+      </div>
+      <div class="bg-green-50 p-6 rounded-lg border border-green-200">
+        <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
+        <p id="resolvedTodayCount" class="text-3xl font-bold text-green-600">-</p>
+      </div>
+      <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
+        <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
+        <p id="newMessagesCount" class="text-3xl font-bold text-purple-600">-</p>
+      </div>
+    </div>
+    <div class="mt-8">
+      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Activity</h2>
+      <div class="border rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
+            </tr>
+          </thead>
+          <tbody id="recentTicketsBody" class="bg-white divide-y divide-gray-200"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  setTimeout(() => {
+    updateAnalyticsDataFromTickets(ticketsData);
+    updateRecentActivityTable(ticketsData);
+  }, 0);
+  return html;
+}
+
+// Update analytics data from tickets object
+function updateAnalyticsDataFromTickets(tickets) {
+  let activeCount = 0;
+  let resolvedCount = 0;
+  let newMessagesCount = 0; // Assuming newMessages field exists
+  let resolvedTodayCount = 0;
+  const now = new Date();
+
+  for (const guildId in tickets) {
+    for (const userId in tickets[guildId]) {
+      const ticket = tickets[guildId][userId];
+      if (ticket.status.toLowerCase() === 'active') activeCount++;
+      if (ticket.status.toLowerCase() === 'resolved') {
+        resolvedCount++;
+        const createdAt = new Date(ticket.createdAt);
+        if (createdAt.toDateString() === now.toDateString()) {
+          resolvedTodayCount++;
+        }
+      }
+      if (ticket.newMessages) newMessagesCount += ticket.newMessages;
+    }
+  }
+
+  document.getElementById('activeTicketsCount').textContent = activeCount;
+  document.getElementById('resolvedTodayCount').textContent = resolvedTodayCount;
+  document.getElementById('newMessagesCount').textContent = newMessagesCount;
+}
+
+// Update recent activity table from tickets object
+function updateRecentActivityTable(tickets) {
+  const recentTicketsBody = document.getElementById('recentTicketsBody');
+  if (!recentTicketsBody) return;
+  recentTicketsBody.innerHTML = '';
+
+  for (const guildId in tickets) {
+    for (const userId in tickets[guildId]) {
+      const ticket = tickets[guildId][userId];
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.ticketNumber || ticket.channelId || 'Unknown'}</td>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.userName || 'Unknown'}</td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+            ticket.status && ticket.status.toLowerCase() === 'resolved' ? 'bg-green-100 text-green-800' :
+            ticket.status && ticket.status.toLowerCase() === 'in progress' ? 'bg-yellow-100 text-yellow-800' :
+            'bg-red-100 text-red-800'
+          }">${ticket.status || 'Unknown'}</span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">${ticket.createdAt ? formatTimeDiff(ticket.createdAt) : 'Unknown'}</td>
+      `;
+      recentTicketsBody.appendChild(tr);
+    }
+  }
+}
 
 const BACKEND_URL = 'http://localhost:4000';
 
@@ -290,21 +457,21 @@ function showAnalytics(event) {
 }
 
 function renderAnalyticsContent() {
-  return `
+  const html = `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Analytics</h1>
     <p class="mb-6 text-gray-600">Overview of ticket statuses and recent activity.</p>
     <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
       <div class="bg-blue-50 p-6 rounded-lg border border-blue-200">
         <h3 class="text-lg font-semibold mb-2 text-blue-800">Active Tickets</h3>
-        <p id="activeTicketsCount" class="text-3xl font-bold text-blue-600">0</p>
+        <p id="activeTicketsCount" class="text-3xl font-bold text-blue-600">-</p>
       </div>
       <div class="bg-green-50 p-6 rounded-lg border border-green-200">
         <h3 class="text-lg font-semibold mb-2 text-green-800">Resolved Today</h3>
-        <p id="resolvedTodayCount" class="text-3xl font-bold text-green-600">0</p>
+        <p id="resolvedTodayCount" class="text-3xl font-bold text-green-600">-</p>
       </div>
       <div class="bg-purple-50 p-6 rounded-lg border border-purple-200">
         <h3 class="text-lg font-semibold mb-2 text-purple-800">New Messages</h3>
-        <p id="newMessagesCount" class="text-3xl font-bold text-purple-600">0</p>
+        <p id="newMessagesCount" class="text-3xl font-bold text-purple-600">-</p>
       </div>
     </div>
     <div class="mt-8">
@@ -324,6 +491,11 @@ function renderAnalyticsContent() {
       </div>
     </div>
   `;
+  setTimeout(() => {
+    updateAnalyticsDataFromTickets(ticketsData);
+    updateRecentActivityTable(ticketsData);
+  }, 0);
+  return html;
 }
 
 // Utility function to format time difference
@@ -344,7 +516,7 @@ function formatTimeDiff(dateString) {
 // Fetch and update analytics data
 async function updateAnalyticsData() {
   try {
-    const res = await fetch('/api/tickets');
+    const res = await fetch(`${BACKEND_URL}/api/tickets`);
     const tickets = await res.json();
     const statusSummary = { active: 0, resolved: 0, newMessages: 0 };
     let resolvedTodayCount = 0;
@@ -394,12 +566,14 @@ async function updateAnalyticsData() {
   }
 }
 
+/*
 // Update analytics data every 10 seconds if on analytics page
 setInterval(() => {
   if (currentView === 'analytics') {
     updateAnalyticsData();
   }
 }, 10000);
+*/
 
 // --- Sidebar & Navigation ---
 function toggleCollapsible() {
@@ -413,11 +587,13 @@ function logout() {
 }
 function showTicketsOptions(event) {
   event.preventDefault();
+  currentView = 'dashboard'; // or 'ticketsView' if preferred
   currentSidebarContent = 'tickets';
   renderView();
 }
 function showSettingsOptions(event) {
   event.preventDefault();
+  currentView = 'dashboard'; // or 'settingsView' if preferred
   currentSidebarContent = 'settings';
   renderView();
 }
@@ -436,6 +612,11 @@ function goBackToDashboard() {
   renderView();
 }
 function getSidebarContent() {
+  if (currentView === 'analytics') {
+    return `
+      <li><a href="#" class="block py-2 px-4 rounded cursor-default">Ticket Analytics</a></li>
+    `;
+  }
   if (currentSidebarContent === 'tickets') {
     return `
       <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
