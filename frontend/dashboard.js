@@ -81,14 +81,7 @@ let ticketsData = {};
 // Update tickets data and refresh UI
 function updateTicketsData(tickets) {
   console.log('updateTicketsData called with tickets:', tickets);
-  // Remove resolved tickets from ticketsData to avoid conflict with new ticket creation
-  for (const guildId in tickets) {
-    for (const userId in tickets[guildId]) {
-      if (tickets[guildId][userId].status && tickets[guildId][userId].status.toLowerCase() === 'resolved') {
-        delete tickets[guildId][userId];
-      }
-    }
-  }
+  // Do not remove resolved tickets to keep them visible in recent activity
   ticketsData = tickets;
   console.log('ticketsData updated to:', ticketsData);
   if (currentView === 'analytics') {

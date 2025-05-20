@@ -52,7 +52,7 @@ const getTicketsWithUserNames = () => {
     for (const userId in activeTickets[guildId]) {
       const ticket = activeTickets[guildId][userId];
       let userName = 'Unknown';
-      let ticketNumber = 'Unknown';
+      let ticketNumber = ticket.ticketNumber || 'Unknown';
       if (guild) {
         const member = guild.members.cache.get(userId);
         if (member) {
@@ -60,7 +60,7 @@ const getTicketsWithUserNames = () => {
         }
         try {
           const channel = guild.channels.cache.get(ticket.channelId);
-          if (channel) {
+          if (channel && !ticket.ticketNumber) {
             const match = channel.name.match(/^ticket-(\d{4})$/);
             if (match) {
               ticketNumber = match[1];
@@ -70,6 +70,7 @@ const getTicketsWithUserNames = () => {
           console.error('Error fetching channel for ticket number:', err);
         }
       }
+      console.log(`Ticket for user ${userName} in guild ${guildId} has ticketNumber: ${ticketNumber}`);
       ticketsWithUserNames[guildId][userId] = {
         ...ticket,
         userName,
@@ -351,7 +352,7 @@ client.on('interactionCreate', async (interaction) => {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
 
-    if (activeTickets[guildId] && activeTickets[guildId][userId]) {
+    if (activeTickets[guildId] && activeTickets[guildId][userId] && activeTickets[guildId][userId].status === 'active') {
       return interaction.reply({
         content: `You already have an open ticket. Please use that one.`,
         ephemeral: true
@@ -384,6 +385,7 @@ client.on('interactionCreate', async (interaction) => {
       if (!activeTickets[guildId]) activeTickets[guildId] = {};
       activeTickets[guildId][userId] = {
         channelId: channel.id,
+        ticketNumber: ticketNumber,
         createdAt: new Date(),
         status: 'active'
       };
@@ -441,6 +443,9 @@ client.on('interactionCreate', async (interaction) => {
 
       if (ticketOwnerUserId) {
         activeTickets[guildId][ticketOwnerUserId].status = 'resolved';
+        console.log('Before saveData, activeTickets:', JSON.stringify(activeTickets, null, 2));
+        saveData();
+        console.log('After saveData, activeTickets saved');
 
         broadcastUpdate({
           type: 'TICKET_UPDATE',
