@@ -43,6 +43,24 @@ wss.on('connection', (ws) => {
             guilds
           }));
         }
+      } else if (data.type === 'TICKET_MESSAGE') {
+        // Handle incoming ticket message
+        const { guildId, ticketNumber, message: ticketMessage } = data;
+        if (!activeTickets[guildId]) activeTickets[guildId] = {};
+        if (!activeTickets[guildId][ticketNumber]) activeTickets[guildId][ticketNumber] = {};
+        if (!activeTickets[guildId][ticketNumber].messages) activeTickets[guildId][ticketNumber].messages = [];
+        // Ensure message has timestamp and content
+        const msgToStore = {
+          timestamp: ticketMessage.timestamp || new Date().toISOString(),
+          content: ticketMessage.content || ticketMessage.text || JSON.stringify(ticketMessage)
+        };
+        activeTickets[guildId][ticketNumber].messages.push(msgToStore);
+        // Broadcast to all clients
+        broadcastUpdate({
+          type: 'TICKET_MESSAGE',
+          ticketNumber,
+          message: msgToStore
+        });
       }
     } catch (e) {
       console.error('WebSocket message error:', e);
@@ -138,6 +156,21 @@ app.get('/api/tickets/:guildId', async (req, res) => {
   res.json(tickets);
 });
 
+// New endpoint to get messages for a ticket
+app.get('/api/ticket-messages/:ticketNumber', (req, res) => {
+  const { ticketNumber } = req.params;
+  // Find messages for the ticketNumber in activeTickets or elsewhere
+  let messages = [];
+  for (const guildId in activeTickets) {
+    if (activeTickets[guildId][ticketNumber]) {
+      // For simplicity, assume messages are stored in activeTickets[guildId][ticketNumber].messages
+      messages = activeTickets[guildId][ticketNumber].messages || [];
+      break;
+    }
+  }
+  res.json(messages);
+});
+
 app.post('/api/deploy-embed', async (req, res) => {
   try {
     const { channelId, title, description, buttonLabel, color } = req.body;
@@ -185,6 +218,45 @@ client.once('ready', () => {
   broadcastUpdate({
     type: 'GUILD_UPDATE',
     guilds: connectedGuilds
+  });
+
+  // Listen for new messages in ticket channels for live updates
+  client.on('messageCreate', async (message) => {
+    try {
+      console.log('Received messageCreate event:', message.content);
+      if (message.author.bot) return; // Ignore bot messages
+      const guildId = message.guild.id;
+      // Find ticketNumber by channelId
+      let ticketNumber = null;
+      if (activeTickets[guildId]) {
+        for (const tNum in activeTickets[guildId]) {
+          if (activeTickets[guildId][tNum].channelId === message.channel.id) {
+            ticketNumber = tNum;
+            break;
+          }
+        }
+      }
+      if (!ticketNumber) return; // Not a ticket channel
+      // Prepare message object
+      const ticketMessage = {
+        timestamp: message.createdAt.toISOString(),
+        content: message.content,
+        sender: message.author.username
+      };
+      // Store message
+      if (!activeTickets[guildId][ticketNumber].messages) {
+        activeTickets[guildId][ticketNumber].messages = [];
+      }
+      activeTickets[guildId][ticketNumber].messages.push(ticketMessage);
+      // Broadcast to clients
+      broadcastUpdate({
+        type: 'TICKET_MESSAGE',
+        ticketNumber,
+        message: ticketMessage
+      });
+    } catch (err) {
+      console.error('Error handling messageCreate event:', err);
+    }
   });
 });
 
@@ -263,7 +335,14 @@ return interaction.reply({
         channelId: channel.id,
         createdAt: new Date(),
         status: 'active',
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        messages: [
+          {
+            timestamp: new Date().toISOString(),
+            content: `Hello <@${userId}>, support staff will be with you shortly.`,
+            sender: 'Bot'
+          }
+        ]
       };
       const embed = new EmbedBuilder()
         .setTitle('Support Ticket')
@@ -284,7 +363,7 @@ await interaction.reply({
         content: `Your ticket has been created: <#${channel.id}>`,
         flags: 64
       });
-setTimeout(() => {
+      setTimeout(() => {
   interaction.deleteReply().catch(() => {});
 }, 5000);
 return;

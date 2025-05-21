@@ -2,6 +2,7 @@
 // DASHBOARD.JS (FULL VERSION, FIXED DEPLOY EMBED PAYLOAD STRUCTURE)
 // =====================
 
+ 
 // --- CONFIGURATION ---
 const API_BASE = 'http://localhost:4000';
 
@@ -21,6 +22,8 @@ let embedColor = localStorage.getItem('embedColor') || '#5865F2';
 let tickets = [];
 let ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
 let ticketActivity = [];
+let currentTicketLiveView = null; // New state: currently viewed ticket in live view
+let ticketMessages = {}; // Store messages per ticket for live view
 
 
 function disconnectDiscord() {
@@ -277,7 +280,7 @@ function renderClosedTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'closed').map(t => `
-            <tr>
+            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -304,7 +307,7 @@ function renderAllTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.map(t => `
-            <tr>
+            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -331,7 +334,7 @@ function renderOpenTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'active').map(t => `
-            <tr>
+            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -522,11 +525,77 @@ function getSidebarContent() {
   return `<li class="text-gray-700">No quick options available.</li>`;
 }
 
+
+function renderTicketLiveViewContent() {
+  if (!currentTicketLiveView) return '<p>No ticket selected.</p>';
+  const messages = ticketMessages[currentTicketLiveView] || [];
+  console.log('Rendering live ticket view for ticket:', currentTicketLiveView, 'with messages:', messages);
+  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()');
+}
+
 function renderView() {
   localStorage.setItem('currentView', currentView);
   localStorage.setItem('currentSidebarContent', currentSidebarContent);
   if (currentView === 'login') {
     renderLogin();
+  } else if (currentView === 'ticketLiveView') {
+    document.getElementById('app').innerHTML = `
+      <div class="flex h-screen">
+        <div class="bg-gray-800 text-white w-64 flex-shrink-0 h-full flex flex-col justify-between">
+          <div>
+            <div class="p-4">
+              <h2 class="text-xl font-bold mb-6">Dashboard</h2>
+              <nav>
+                <ul>
+                  <li class="mb-2">
+                    <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showTicketsOptions(event)">
+                      <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
+                      </svg>
+                      Tickets
+                    </a>
+                  </li>
+                  <li>
+                    <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showSettingsOptions(event)">
+                      <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                      </svg>
+                      Settings
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+            </div>
+          </div>
+          <div class="p-4 mb-4">
+            <button onclick="window.logout()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+              Logout
+            </button>
+          </div>
+        </div>
+        <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '64px'}">
+          <div class="p-3">
+            <button onclick="window.toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
+              </svg>
+            </button>
+            <div class="mt-4 ${isCollapsibleOpen ? 'block' : 'hidden'}">
+              <h3 class="text-lg font-semibold mb-3">Quick Options</h3>
+              <ul id="sidebarOptions">
+                ${getSidebarContent()}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="flex-1 p-8 overflow-auto" style="padding-bottom: 0;">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            ${renderTicketLiveViewContent()}
+          </div>
+        </div>
+      </div>
+    </div>
+    `;
   } else {
     renderDashboard();
   }
@@ -547,6 +616,7 @@ function setupWebSocket() {
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
+      console.log('WebSocket message received:', data);
       if (data.type === 'GUILD_UPDATE' || data.type === 'GUILD_STATUS') {
         if (data.guilds && data.guilds.length > 0) {
           discordConnected = true;
@@ -560,6 +630,20 @@ function setupWebSocket() {
           connectedGuildId = '';
           availableChannels = [];
           tickets = [];
+          renderView();
+        }
+      } else if (data.type === 'TICKET_MESSAGE') {
+        // New WebSocket message for live ticket update
+        let ticketNumber = data.ticketNumber;
+        // Normalize ticketNumber to string with leading zeros length 4
+        ticketNumber = ticketNumber.toString().padStart(4, '0');
+        const message = data.message;
+        if (!ticketMessages[ticketNumber]) {
+          ticketMessages[ticketNumber] = [];
+        }
+        ticketMessages[ticketNumber].push(message);
+        // If currently viewing this ticket live, re-render
+        if (currentTicketLiveView === ticketNumber) {
           renderView();
         }
       }
@@ -687,3 +771,32 @@ window.onEmbedInputChange = onEmbedInputChange;
 window.previewEmbed = previewEmbed;
 window.goBackToDashboard = goBackToDashboard;
 window.deployEmbed = deployEmbed;
+
+// New functions for live ticket view
+window.openTicketLiveView = function(ticketNumber) {
+  // Normalize ticketNumber to string with leading zeros length 4
+  ticketNumber = ticketNumber.toString().padStart(4, '0');
+  currentTicketLiveView = ticketNumber;
+  // Fetch initial messages for the ticket
+  fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to fetch ticket messages');
+      return res.json();
+    })
+    .then(data => {
+      ticketMessages[ticketNumber] = data || [];
+      currentView = 'ticketLiveView';
+      renderView();
+    })
+    .catch(err => {
+      ticketMessages[ticketNumber] = [];
+      currentView = 'ticketLiveView';
+      renderView();
+    });
+};
+
+window.closeTicketLiveView = function() {
+  currentTicketLiveView = null;
+  currentView = 'allTickets'; // or previous view if you want to track it
+  renderView();
+};
