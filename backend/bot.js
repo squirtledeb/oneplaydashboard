@@ -109,12 +109,30 @@ app.get('/api/channels/:guildId', (req, res) => {
   res.json(channels);
 });
 
-app.get('/api/tickets/:guildId', (req, res) => {
+app.get('/api/tickets/:guildId', async (req, res) => {
   const { guildId } = req.params;
   const tickets = [];
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    return res.status(404).json({ error: 'Guild not found' });
+  }
   if (activeTickets[guildId]) {
     for (const ticketNumber in activeTickets[guildId]) {
-      tickets.push(activeTickets[guildId][ticketNumber]);
+      const ticket = activeTickets[guildId][ticketNumber];
+      // Try to get member from cache or fetch from API
+      let member = guild.members.cache.get(ticket.userId);
+      if (!member) {
+        try {
+          member = await guild.members.fetch(ticket.userId);
+        } catch (e) {
+          member = null;
+        }
+      }
+      const username = member ? member.user.username : 'Unknown';
+      tickets.push({
+        ...ticket,
+        username
+      });
     }
   }
   res.json(tickets);
@@ -210,9 +228,9 @@ client.on('interactionCreate', async (interaction) => {
     // Check if user already has an open ticket
     for (const tNum in activeTickets[guildId]) {
       if (activeTickets[guildId][tNum].userId === userId && activeTickets[guildId][tNum].status === 'active') {
-        return interaction.reply({
+return interaction.reply({
           content: `You already have an open ticket (#${tNum}). Please use that one.`,
-          ephemeral: true
+          flags: 64
         });
       }
     }
@@ -262,14 +280,18 @@ client.on('interactionCreate', async (interaction) => {
         embeds: [embed],
         components: [closeButton]
       });
-      return interaction.reply({
-        content: `Your ticket has been created: <#${channel.id}> (Ticket #${ticketNumber})`,
-        ephemeral: true
+await interaction.reply({
+        content: `Your ticket has been created: <#${channel.id}>`,
+        flags: 64
       });
+setTimeout(() => {
+  interaction.deleteReply().catch(() => {});
+}, 5000);
+return;
     } catch (error) {
-      return interaction.reply({
+return interaction.reply({
         content: 'There was an error creating your ticket. Please try again later.',
-        ephemeral: true
+        flags: 64
       });
     }
   }
@@ -289,8 +311,9 @@ client.on('interactionCreate', async (interaction) => {
       if (ticketNumber) {
         activeTickets[guildId][ticketNumber].status = 'closed';
         activeTickets[guildId][ticketNumber].lastUpdated = new Date();
-        await interaction.reply({
+await interaction.reply({
           content: 'This ticket has been closed. The channel will be deleted in 5 seconds...',
+          flags: 64
         });
         setTimeout(async () => {
           try {
@@ -298,8 +321,9 @@ client.on('interactionCreate', async (interaction) => {
           } catch (err) {}
         }, 5000);
       } else {
-        await interaction.reply({
+await interaction.reply({
           content: 'Unable to find ticket information. Please close it manually.',
+          flags: 64
         });
       }
     } catch (error) {

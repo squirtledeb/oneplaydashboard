@@ -22,6 +22,32 @@ let tickets = [];
 let ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
 let ticketActivity = [];
 
+
+function disconnectDiscord() {
+  manualDisconnect = true;
+  discordConnected = false;
+  connectedServer = '';
+  connectedGuildId = '';
+  availableChannels = [];
+  tickets = [];
+  embedTitle = 'Support Ticket System';
+  embedDescription = 'Click the button below to create a new support ticket.';
+  embedButtonLabel = 'Create Ticket';
+  embedColor = '#5865F2';
+  selectedChannelId = '';
+  localStorage.removeItem('embedTitle');
+  localStorage.removeItem('embedDescription');
+  localStorage.removeItem('embedButtonLabel');
+  localStorage.removeItem('embedColor');
+  localStorage.removeItem('selectedChannelId');
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  stopPolling();
+  renderView();
+}
+
 // --- HANDLER FUNCTIONS ---
 function toggleCollapsible() {
   isCollapsibleOpen = !isCollapsibleOpen;
@@ -175,18 +201,18 @@ function renderDashboardContent() {
           <thead class="bg-gray-50">
             <tr>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             ${ticketActivity.map(t => `
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -213,7 +239,7 @@ function renderIntegrationsContent() {
         <div>
           ${discordConnected 
             ? `<button onclick="disconnectDiscord()" class="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition">Disconnect</button>`
-            : `<button onclick="connectDiscord()" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">Connect</button>`
+            : `<button onclick="window.open('https://discord.com/oauth2/authorize?client_id=1372610090888069190&permissions=8&integration_type=0&scope=bot', '_blank')" class="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition">Connect</button>`
           }
         </div>
       </div>
@@ -239,24 +265,24 @@ function renderSettingsDashboardContent() {
 }
 function renderClosedTicketsContent() {
   return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Closed Tickets</h1>
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Resolved Tickets</h1>
     <div class="border rounded-lg overflow-hidden">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'closed').map(t => `
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Resolved</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -272,18 +298,18 @@ function renderAllTicketsContent() {
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.map(t => `
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -293,24 +319,24 @@ function renderAllTicketsContent() {
 }
 function renderOpenTicketsContent() {
   return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Open Tickets</h1>
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Active Tickets</h1>
     <div class="border rounded-lg overflow-hidden">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last Updated</th>
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'active').map(t => `
             <tr>
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+              <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Active</span>
               </td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDateTime(t.lastUpdated)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -380,7 +406,34 @@ function formatDateTime(date) {
   return d.toLocaleString();
 }
 
-// --- MAIN RENDER FUNCTION ---
+function renderLogin() {
+  document.getElementById('app').innerHTML = `
+    <div class="flex items-center justify-center min-h-screen bg-gray-100">
+      <div class="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">Login</h2>
+        <form id="loginForm" class="space-y-4">
+          <div>
+            <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <input type="text" id="username" name="username" required class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <input type="password" id="password" name="password" required class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition">Login</button>
+        </form>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('loginForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    // For now, just redirect to dashboard on submit
+    currentView = 'dashboard';
+    renderView();
+  });
+}
+
 const renderDashboard = function() {
   document.getElementById('app').innerHTML = `
     <div class="flex h-screen">
@@ -456,8 +509,8 @@ function getSidebarContent() {
   if (currentSidebarContent === 'tickets') {
     return `
       <li><a href="#" onclick="window.showTicketDashboard(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Ticket Dashboard</a></li>
-      <li><a href="#" onclick="window.showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Open Tickets</a></li>
-      <li><a href="#" onclick="window.showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Closed Tickets</a></li>
+      <li><a href="#" onclick="window.showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Active Tickets</a></li>
+      <li><a href="#" onclick="window.showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Resolved Tickets</a></li>
       <li><a href="#" onclick="window.showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
     `;
   } else if (currentSidebarContent === 'settings') {
@@ -469,16 +522,11 @@ function getSidebarContent() {
   return `<li class="text-gray-700">No quick options available.</li>`;
 }
 
-// --- MAIN RENDER FUNCTION ---
 function renderView() {
   localStorage.setItem('currentView', currentView);
   localStorage.setItem('currentSidebarContent', currentSidebarContent);
   if (currentView === 'login') {
-    if (typeof renderLogin === 'function') {
-      renderLogin();
-    } else {
-      document.getElementById('app').innerHTML = '<div class="p-8 text-red-600">Login view not implemented.</div>';
-    }
+    renderLogin();
   } else {
     renderDashboard();
   }
@@ -580,7 +628,8 @@ function updateTicketDashboardStats() {
       ticketNumber: ticket.ticketNumber,
       status: ticket.status,
       lastUpdated: ticket.lastUpdated,
-      userId: ticket.userId
+      userId: ticket.userId,
+      username: ticket.username || 'Unknown'
     });
   });
   ticketDashboardStats = { active, resolvedToday, newMessages: 0 };
