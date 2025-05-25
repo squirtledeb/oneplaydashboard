@@ -641,6 +641,7 @@ function setupWebSocket() {
           connectedServer = data.guilds[0].name;
           connectedGuildId = data.guilds[0].id;
           fetchChannelsForGuild(connectedGuildId);
+          fetchCategoriesForGuild(connectedGuildId);
           fetchTicketsForGuild(connectedGuildId);
         } else {
           discordConnected = false;
@@ -648,7 +649,9 @@ function setupWebSocket() {
           connectedGuildId = '';
           availableChannels = [];
           tickets = [];
-          renderView();
+          if (currentView !== 'botSetup') {
+            renderView();
+          }
         }
       } else if (data.type === 'TICKET_MESSAGE') {
         // New WebSocket message for live ticket update
@@ -779,7 +782,9 @@ function pollGuildStatus() {
           availableChannels = [];
           availableCategories = [];
           tickets = [];
-          renderView();
+          if (currentView !== 'botSetup') {
+            renderView();
+          }
         }
       })
       .catch(error => {
@@ -790,9 +795,27 @@ function pollGuildStatus() {
 
 // --- INIT ---
 document.addEventListener('DOMContentLoaded', () => {
+  // Restore state from localStorage
+  currentView = localStorage.getItem('currentView') || 'login';
+  currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'tickets';
+  selectedCategoryId = localStorage.getItem('selectedCategoryId') || '';
+  selectedChannelId = localStorage.getItem('selectedChannelId') || '';
+  embedTitle = localStorage.getItem('embedTitle') || 'Support Ticket System';
+  embedDescription = localStorage.getItem('embedDescription') || 'Click the button below to create a new support ticket.';
+  embedButtonLabel = localStorage.getItem('embedButtonLabel') || 'Create Ticket';
+  embedColor = localStorage.getItem('embedColor') || '#5865F2';
+
   renderView();
   setupWebSocket();
-  pollGuildStatus();
+
+  // Fetch initial data for the connected guild if any
+  if (connectedGuildId) {
+    fetchChannelsForGuild(connectedGuildId);
+    fetchCategoriesForGuild(connectedGuildId);
+    fetchTicketsForGuild(connectedGuildId);
+  }
+  // Removed pollGuildStatus to prevent periodic refresh causing scroll reset
+  // pollGuildStatus();
 });
 
 // --- EXPOSE FUNCTIONS TO WINDOW FOR INLINE HANDLERS ---

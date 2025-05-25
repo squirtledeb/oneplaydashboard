@@ -277,11 +277,17 @@ client.once('ready', () => {
 });
 
 // Handle bot joining a new server
-client.on('guildCreate', (guild) => {
+client.on('guildCreate', async (guild) => {
   connectedGuilds.push({
     id: guild.id,
     name: guild.name
   });
+  // Fetch channels to populate cache
+  try {
+    await guild.channels.fetch();
+  } catch (err) {
+    console.error('Error fetching channels on guildCreate:', err);
+  }
   broadcastUpdate({
     type: 'GUILD_UPDATE',
     guilds: connectedGuilds
