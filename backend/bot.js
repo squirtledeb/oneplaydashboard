@@ -361,8 +361,8 @@ return interaction.reply({
         messages: [
           {
             timestamp: new Date().toISOString(),
-            content: `Hello <@${userId}>, support staff will be with you shortly.`,
-            sender: 'Bot'
+            content: `Hello <@${userId}>, thanks for creating a support ticket. Support team will be here to assist you shortly.`,
+            sender: 'Oneplay AI'
           }
         ]
       };
