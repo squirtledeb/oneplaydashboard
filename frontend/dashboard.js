@@ -14,6 +14,8 @@ let discordConnected = false;
 let connectedServer = '';
 let connectedGuildId = '';
 let availableChannels = [];
+let availableCategories = [];
+let selectedCategoryId = localStorage.getItem('selectedCategoryId') || '';
 let selectedChannelId = localStorage.getItem('selectedChannelId') || '';
 let embedTitle = localStorage.getItem('embedTitle') || 'Support Ticket System';
 let embedDescription = localStorage.getItem('embedDescription') || 'Click the button below to create a new support ticket.';
@@ -109,6 +111,10 @@ function onChannelSelectChange(select) {
   selectedChannelId = select.value;
   localStorage.setItem('selectedChannelId', selectedChannelId);
 }
+function onCategorySelectChange(select) {
+  selectedCategoryId = select.value;
+  localStorage.setItem('selectedCategoryId', selectedCategoryId);
+}
 function onEmbedInputChange() {
   embedTitle = document.getElementById('embedTitle').value;
   embedDescription = document.getElementById('embedDescription').value;
@@ -137,6 +143,7 @@ function deployEmbed() {
     showDeployMessage('Please select a channel before deploying.', false);
     return;
   }
+  // Validate category selection is optional, so no error if empty
   if (!embedTitle || !embedDescription || !embedButtonLabel || !embedColor) {
     showDeployMessage('Please fill in all embed fields.', false);
     return;
@@ -147,7 +154,8 @@ function deployEmbed() {
     title: embedTitle,
     description: embedDescription,
     buttonLabel: embedButtonLabel,
-    color: embedColor
+    color: embedColor,
+    parentCategoryId: selectedCategoryId || null
   };
   fetch(`${API_BASE}/api/deploy-embed`, {
     method: 'POST',
@@ -356,7 +364,17 @@ function renderBotSetup() {
         <p class="text-yellow-700">Please connect your Discord server first in the Integrations section.</p>
       </div>` :
       `<div class="border rounded-lg p-6 mb-6">
-        <h2 class="text-xl font-semibold mb-4">Channel Configuration</h2>
+        <h2 class="text-xl font-semibold mb-4">Category Configuration</h2>
+        <div class="mb-4">
+          <label for="categorySelect" class="block text-sm font-medium text-gray-700 mb-2">Select Category for Tickets</label>
+          <select id="categorySelect" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" onchange="onCategorySelectChange(this)">
+            <option value="">-- Select a category --</option>
+            ${availableCategories.map(category => 
+              `<option value="${category.id}"${category.id === selectedCategoryId ? ' selected' : ''}>${category.name}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <h2 class="text-xl font-semibold mb-4 mt-6">Channel Configuration</h2>
         <div class="mb-4">
           <label for="channelSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Channel for Ticket Messages</label>
           <select id="channelSelect" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" onchange="onChannelSelectChange(this)">
@@ -680,6 +698,26 @@ function fetchChannelsForGuild(guildId) {
       renderView();
     });
 }
+
+function fetchCategoriesForGuild(guildId) {
+  fetch(`${API_BASE}/api/categories/${guildId}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to fetch categories');
+      return res.json();
+    })
+    .then(categories => {
+      availableCategories = categories || [];
+      if (!availableCategories.find(c => c.id === selectedCategoryId)) {
+        selectedCategoryId = '';
+        localStorage.removeItem('selectedCategoryId');
+      }
+      renderView();
+    })
+    .catch(err => {
+      availableCategories = [];
+      renderView();
+    });
+}
 function fetchTicketsForGuild(guildId) {
   fetch(`${API_BASE}/api/tickets/${guildId}`)
     .then(res => {
@@ -732,12 +770,14 @@ function pollGuildStatus() {
           connectedServer = guilds[0].name;
           connectedGuildId = guilds[0].id;
           fetchChannelsForGuild(connectedGuildId);
+          fetchCategoriesForGuild(connectedGuildId);
           fetchTicketsForGuild(connectedGuildId);
         } else {
           discordConnected = false;
           connectedServer = '';
           connectedGuildId = '';
           availableChannels = [];
+          availableCategories = [];
           tickets = [];
           renderView();
         }

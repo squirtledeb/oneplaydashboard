@@ -127,6 +127,22 @@ app.get('/api/channels/:guildId', (req, res) => {
   res.json(channels);
 });
 
+// New endpoint to get categories for a guild
+app.get('/api/categories/:guildId', (req, res) => {
+  const { guildId } = req.params;
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    return res.status(404).json({ error: 'Guild not found' });
+  }
+  const categories = guild.channels.cache
+    .filter(channel => channel.type === 4)
+    .map(category => ({
+      id: category.id,
+      name: category.name
+    }));
+  res.json(categories);
+});
+
 app.get('/api/tickets/:guildId', async (req, res) => {
   const { guildId } = req.params;
   const tickets = [];
@@ -173,7 +189,7 @@ app.get('/api/ticket-messages/:ticketNumber', (req, res) => {
 
 app.post('/api/deploy-embed', async (req, res) => {
   try {
-    const { channelId, title, description, buttonLabel, color } = req.body;
+    const { channelId, title, description, buttonLabel, color, parentCategoryId } = req.body;
     if (!channelId || !title || !description || !buttonLabel) {
       return res.status(400).json({ error: 'Missing required fields', success: false });
     }
@@ -193,7 +209,7 @@ app.post('/api/deploy-embed', async (req, res) => {
     const row = new ActionRowBuilder()
       .addComponents(
         new ButtonBuilder()
-          .setCustomId('create_ticket')
+          .setCustomId(`create_ticket:${parentCategoryId || ''}`)
           .setLabel(buttonLabel)
           .setStyle(ButtonStyle.Primary)
       );
@@ -293,7 +309,7 @@ function getNextTicketNumber(guildId) {
 // --- TICKET INTERACTIONS ---
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isButton()) return;
-  if (interaction.customId === 'create_ticket') {
+  if (interaction.customId.startsWith('create_ticket')) {
     const guildId = interaction.guild.id;
     const userId = interaction.user.id;
     if (!activeTickets[guildId]) activeTickets[guildId] = {};
@@ -310,7 +326,7 @@ return interaction.reply({
     const ticketNumber = getNextTicketNumber(guildId);
     try {
       // Create a new ticket channel
-      const channel = await interaction.guild.channels.create({
+      const channelOptions = {
         name: ticketNumber,
         type: 0,
         permissionOverwrites: [
@@ -327,7 +343,13 @@ return interaction.reply({
             allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory']
           }
         ]
-      });
+      };
+      // Extract parentCategoryId from customId
+      const parentCategoryId = interaction.customId.split(':')[1];
+      if (parentCategoryId) {
+        channelOptions.parent = parentCategoryId;
+      }
+      const channel = await interaction.guild.channels.create(channelOptions);
       // Store the active ticket
       activeTickets[guildId][ticketNumber] = {
         ticketNumber,
