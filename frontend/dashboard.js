@@ -2,7 +2,7 @@
 // DASHBOARD.JS (FULL VERSION, FIXED DEPLOY EMBED PAYLOAD STRUCTURE)
 // =====================
 
- 
+
 // --- CONFIGURATION ---
 const API_BASE = 'http://localhost:4000';
 
@@ -26,6 +26,10 @@ let ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
 let ticketActivity = [];
 let currentTicketLiveView = null; // New state: currently viewed ticket in live view
 let ticketMessages = {}; // Store messages per ticket for live view
+let formQuestions = []; // Store form questions
+let autoDisplayFormResults = false; // New state for auto display toggle
+
+
 
 
 function disconnectDiscord() {
@@ -68,6 +72,12 @@ function showSettingsOptions(event) {
   currentSidebarContent = 'settings';
   renderView();
 }
+function showAIOptions(event) {
+  event.preventDefault();
+  currentSidebarContent = 'ai';
+  currentView = 'knowledgeDatabase';
+  renderView();
+}
 function showTicketDashboard(event) {
   event.preventDefault();
   currentView = 'ticketDashboard';
@@ -96,6 +106,26 @@ function showIntegrations(event) {
 function showBotSettings(event) {
   event.preventDefault();
   currentView = 'botSetup';
+  renderView();
+}
+function showFormSetup(event) {
+  event.preventDefault();
+  currentView = 'formSetup';
+  renderView();
+}
+function showKnowledgeDatabase(event) {
+  event.preventDefault();
+  currentView = 'knowledgeDatabase';
+  renderView();
+}
+function showTraining(event) {
+  event.preventDefault();
+  currentView = 'training';
+  renderView();
+}
+function showAISettings(event) {
+  event.preventDefault();
+  currentView = 'aiSettings';
   renderView();
 }
 function goBackToDashboard() {
@@ -155,7 +185,7 @@ function deployEmbed() {
     description: embedDescription,
     buttonLabel: embedButtonLabel,
     color: embedColor,
-    parentCategoryId: selectedCategoryId || null
+    parentCategoryId: selectedCategoryId || ''
   };
   fetch(`${API_BASE}/api/deploy-embed`, {
     method: 'POST',
@@ -220,10 +250,10 @@ function renderDashboardContent() {
             ${ticketActivity.map(t => `
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
-                <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
-                </td>
+          <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
+          <td class="px-6 py-4 whitespace-nowrap">
+            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
+          </td>
               </tr>
             `).join('')}
           </tbody>
@@ -357,7 +387,7 @@ function renderOpenTicketsContent() {
 }
 function renderBotSetup() {
   return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Bot Setup</h1>
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Panel Config</h1>
     <p class="mb-6 text-gray-600">Configure how the bot will handle tickets in your Discord server.</p>
     ${!discordConnected ? 
       `<div class="p-6 bg-yellow-50 rounded-lg border border-yellow-200 mb-6">
@@ -421,6 +451,255 @@ function renderBotSetup() {
     </div>
   `;
 }
+
+function renderFormSetupView() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Form Setup</h1>
+    <p class="mb-6 text-gray-600">Configure the form questions that users will fill when creating a support ticket.</p>
+    
+    <div class="border rounded-lg p-6 mb-6">
+      <h2 class="text-xl font-semibold mb-4">Current Form Questions</h2>
+      ${formQuestions.length === 0 ? 
+        '<p class="text-gray-500 mb-4">No questions configured yet. Add your first question below.</p>' :
+        `<div class="space-y-4 mb-4">
+          <div class="grid grid-cols-12 gap-4 text-sm font-semibold text-gray-700">
+            <div class="col-span-3">Question Title</div>
+            <div class="col-span-3">Question Placeholder</div>
+            <div class="col-span-1">Min Required</div>
+            <div class="col-span-1">Max Required</div>
+            <div class="col-span-2">Required</div>
+            <div class="col-span-2">Multi-line</div>
+            <div class="col-span-12 text-right">Actions</div>
+          </div>
+          ${formQuestions.map((q, index) => `
+            <div class="grid grid-cols-12 gap-4 items-center bg-gray-50 p-3 rounded-lg">
+              <input 
+                type="text" 
+                class="col-span-3 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm" 
+                value="${q.question}" 
+                onchange="window.updateFormQuestion(${index}, 'question', this.value)"
+              />
+              <input 
+                type="text" 
+                class="col-span-3 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm" 
+                value="${q.placeholder || ''}" 
+                placeholder="Enter placeholder" 
+                onchange="window.updateFormQuestion(${index}, 'placeholder', this.value)"
+              />
+              <input 
+                type="number" 
+                min="0" 
+                class="col-span-1 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm" 
+                value="${q.min || 0}" 
+                onchange="window.updateFormQuestion(${index}, 'min', this.value)"
+              />
+              <input 
+                type="number" 
+                min="0" 
+                class="col-span-1 border border-gray-300 rounded-md shadow-sm py-1 px-2 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm" 
+                value="${q.max || 500}" 
+                onchange="window.updateFormQuestion(${index}, 'max', this.value)"
+              />
+              <div class="col-span-2 flex items-center space-x-2">
+                <input type="checkbox" ${q.required ? 'checked' : ''} onchange="window.updateFormQuestion(${index}, 'required', this.checked)" />
+                <label>Required</label>
+              </div>
+              <div class="col-span-2 flex items-center space-x-2">
+                <input type="checkbox" ${q.multiline ? 'checked' : ''} onchange="window.updateFormQuestion(${index}, 'multiline', this.checked)" />
+                <label>Multi-line</label>
+              </div>
+              <div class="col-span-12 text-right">
+                <button onclick="window.removeFormQuestion(${index})" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition text-sm">
+                  Remove
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>`
+      }
+      
+      <div class="mt-4 mb-6 flex items-center space-x-2">
+        <input type="checkbox" id="autoDisplayFormResultsCheckbox" ${autoDisplayFormResults ? 'checked' : ''} onchange="window.toggleAutoDisplayFormResults(this.checked)" />
+        <label for="autoDisplayFormResultsCheckbox" class="text-gray-700 text-sm select-none">Auto display form results on the <span class="font-mono">Ticket Message</span> as an additional embed.</label>
+      </div>
+      
+      <div class="border-t pt-4">
+        <h3 class="text-lg font-medium mb-3">Add New Question</h3>
+        <div class="flex gap-3">
+          <input 
+            type="text" 
+            id="newQuestionInput" 
+            placeholder="Enter your question..." 
+            class="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          >
+          <button 
+            onclick="window.addFormQuestion()" 
+            class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+          >
+            Add Question
+          </button>
+        </div>
+      </div>
+      <div class="mt-4 text-right">
+        <button onclick="window.syncFormQuestions()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition">
+          Sync Form Questions
+        </button>
+      </div>
+    </div>
+    
+    <div class="mt-6 text-right">
+      <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
+        Back to Dashboard
+      </button>
+    </div>
+  `;
+}
+
+window.toggleAutoDisplayFormResults = function(checked) {
+  autoDisplayFormResults = checked;
+  window.syncAutoDisplayFormResults();
+};
+
+window.syncAutoDisplayFormResults = function() {
+  fetch(`${API_BASE}/api/auto-display-form-results`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: autoDisplayFormResults })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      alert('Failed to save auto display setting.');
+    }
+  })
+  .catch(err => {
+    alert('Error saving auto display setting: ' + err.message);
+  });
+};
+
+window.fetchAutoDisplayFormResults = function() {
+  fetch(`${API_BASE}/api/auto-display-form-results`)
+    .then(res => res.json())
+    .then(data => {
+      autoDisplayFormResults = data.enabled || false;
+      renderView();
+    })
+    .catch(err => {
+      autoDisplayFormResults = false;
+      renderView();
+    });
+};
+
+// Modify fetchFormQuestions to also fetch auto display setting
+const originalFetchFormQuestions = window.fetchFormQuestions;
+window.fetchFormQuestions = function() {
+  Promise.all([
+    fetch(`${API_BASE}/api/form-questions`).then(res => res.json()),
+    fetch(`${API_BASE}/api/auto-display-form-results`).then(res => res.json())
+  ])
+  .then(([questionsData, autoDisplayData]) => {
+    formQuestions = questionsData || [];
+    autoDisplayFormResults = autoDisplayData.enabled || false;
+    window.formQuestions = formQuestions;
+    renderView();
+  })
+  .catch(err => {
+    formQuestions = [];
+    autoDisplayFormResults = false;
+    window.formQuestions = formQuestions;
+    renderView();
+  });
+};
+
+function renderKnowledgeDatabaseContent() {
+  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
+
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Knowledge Database</h1>
+    <p class="text-gray-600 mb-4">Add any website, Gitbook, PDF or create a custom text block.</p>
+    <div class="p-4 border border-gray-300 rounded-md bg-white">
+      ${sources.length === 0 ? '<p class="text-gray-500">No sources uploaded yet.</p>' : ''}
+      <ul class="list-disc list-inside space-y-1">
+        ${sources.map((source, index) => `
+          <li>
+            <span>${source.type}: ${source.name || source.url || 'Unnamed'}</span>
+            <button onclick="removeSource(${index})" class="ml-2 text-red-600 hover:text-red-800">Remove</button>
+          </li>
+        `).join('')}
+      </ul>
+      <button onclick="showUploadSourceModal()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">Upload Sources</button>
+    </div>
+    <div id="uploadSourceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
+        <h2 class="text-xl font-bold mb-4">Add New Source</h2>
+        <form id="uploadSourceForm" class="space-y-4">
+          <div>
+            <label for="sourceType" class="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
+            <select id="sourceType" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+              <option value="webUrl">Web URL</option>
+              <option value="textBlock">Write Text Block</option>
+              <option value="pdf">Upload PDF</option>
+            </select>
+          </div>
+          <div id="sourceInputContainer">
+            <label for="sourceInput" class="block text-sm font-medium text-gray-700 mb-1">URL</label>
+            <input type="text" id="sourceInput" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter URL" />
+          </div>
+          <div id="pdfUploadContainer" class="hidden">
+            <label for="pdfFile" class="block text-sm font-medium text-gray-700 mb-1">Select PDF File</label>
+            <input type="file" id="pdfFile" accept="application/pdf" class="w-full" />
+          </div>
+          <div id="textBlockContainer" class="hidden">
+            <label for="textBlock" class="block text-sm font-medium text-gray-700 mb-1">Text Block</label>
+            <textarea id="textBlock" rows="5" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text"></textarea>
+          </div>
+          <div class="flex justify-end space-x-4">
+            <button type="button" onclick="hideUploadSourceModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add Source</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  `;
+}
+function renderTrainingContent() {
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">Training</h1>
+    <div class="p-6 bg-blue-50 rounded-lg border border-blue-200">
+      <p class="text-blue-700">Yet to be implemented</p>
+    </div>
+  `;
+}
+
+function renderAISettings() {
+  const token = localStorage.getItem('aiBotToken') || '';
+  const model = localStorage.getItem('aiModel') || 'gpt-3.5-turbo';
+
+  const supportedModels = [
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+    { value: 'gpt-3.5-turbo-16k', label: 'GPT-3.5 Turbo 16k' },
+    { value: 'gpt-4', label: 'GPT-4' },
+    { value: 'gpt-4-32k', label: 'GPT-4 32k' },
+    { value: 'text-davinci-003', label: 'Text Davinci 003' }
+  ];
+
+  return `
+    <h1 class="text-2xl font-bold mb-6 text-gray-800">AI Settings</h1>
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="aiBotToken">Bot Token</label>
+      <input type="text" id="aiBotToken" value="${token}" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter your AI bot token" />
+    </div>
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-1" for="aiModel">Model</label>
+      <select id="aiModel" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+        ${supportedModels.map(m => `
+          <option value="${m.value}"${model === m.value ? ' selected' : ''}>${m.label}</option>
+        `).join('')}
+      </select>
+    </div>
+  `;
+}
+
 function formatDateTime(date) {
   if (!date) return '';
   const d = new Date(date);
@@ -481,6 +760,18 @@ const renderDashboard = function() {
                     Settings
                   </a>
                 </li>
+<li>
+  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showAIOptions(event)">
+    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <rect x="6" y="3" width="12" height="18" rx="2" ry="2" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"></rect>
+      <circle cx="12" cy="8" r="1" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"></circle>
+      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M9 21v-2h6v2"></path>
+      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M8 11h8"></path>
+      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M8 15h8"></path>
+    </svg>
+    AI
+  </a>
+</li>
               </ul>
             </nav>
           </div>
@@ -507,7 +798,6 @@ const renderDashboard = function() {
         </div>
       </div>
       <div class="flex-1 p-8 overflow-auto" style="padding-bottom: 0;">
-        <div class="bg-white rounded-lg shadow-md p-6">
           ${
             currentSidebarContent === 'tickets'
               ? (currentView === 'ticketDashboard' ? renderDashboardContent() :
@@ -518,8 +808,14 @@ const renderDashboard = function() {
               : (currentSidebarContent === 'settings'
                 ? (currentView === 'integrations' ? renderIntegrationsContent() :
                   currentView === 'botSetup' ? renderBotSetup() :
+                  currentView === 'formSetup' ? renderFormSetupView() :
                   renderSettingsDashboardContent())
-                : renderDashboardContent())
+                : (currentSidebarContent === 'ai'
+                  ? (currentView === 'knowledgeDatabase' ? renderKnowledgeDatabaseContent() :
+                    currentView === 'training' ? renderTrainingContent() :
+                    currentView === 'aiSettings' ? renderAISettings() :
+                    renderKnowledgeDatabaseContent())
+                  : renderDashboardContent()))
           }
         </div>
       </div>
@@ -537,7 +833,13 @@ function getSidebarContent() {
   } else if (currentSidebarContent === 'settings') {
     return `
       <li><a href="#" onclick="window.showIntegrations(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Integrations</a></li>
-      <li><a href="#" onclick="window.showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Bot Setup</a></li>
+      <li><a href="#" onclick="window.showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Panel Config</a></li>
+      <li><a href="#" onclick="window.showFormSetup(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Form Setup</a></li>
+    `;
+  } else if (currentSidebarContent === 'ai') {
+    return `
+      <li><a href="#" onclick="window.showKnowledgeDatabase(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Knowledge Data base</a></li>
+      <li><a href="#" onclick="window.showTraining(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Training</a></li>
     `;
   }
   return `<li class="text-gray-700">No quick options available.</li>`;
@@ -547,9 +849,51 @@ function getSidebarContent() {
 function renderTicketLiveViewContent() {
   if (!currentTicketLiveView) return '<p>No ticket selected.</p>';
   const messages = ticketMessages[currentTicketLiveView] || [];
-  console.log('Rendering live ticket view for ticket:', currentTicketLiveView, 'with messages:', messages);
-  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()');
+  
+  // Find the ticket data to get form responses
+  let formResponses = null;
+  for (const ticket of tickets) {
+    if (ticket.ticketNumber.toString().padStart(4, '0') === currentTicketLiveView) {
+      formResponses = ticket.formResponses;
+      break;
+    }
+  }
+  
+  console.log('Rendering live ticket view for ticket:', currentTicketLiveView, 'with messages:', messages, 'and form responses:', formResponses);
+  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()', formResponses);
 }
+
+// Fetch ticket messages for live view
+function fetchTicketMessages(ticketNumber) {
+  fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`)
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to fetch ticket messages');
+      return res.json();
+    })
+    .then(data => {
+      ticketMessages[ticketNumber] = data || [];
+      renderView();
+    })
+    .catch(err => {
+      ticketMessages[ticketNumber] = [];
+      renderView();
+    });
+}
+
+// Open live ticket view and fetch messages
+window.openTicketLiveView = function(ticketNumber) {
+  currentTicketLiveView = ticketNumber.toString().padStart(4, '0');
+  fetchTicketMessages(currentTicketLiveView);
+  currentView = 'ticketLiveView';
+  renderView();
+};
+
+// Close live ticket view
+window.closeTicketLiveView = function() {
+  currentTicketLiveView = null;
+  currentView = 'dashboard';
+  renderView();
+};
 
 function renderView() {
   localStorage.setItem('currentView', currentView);
@@ -667,6 +1011,17 @@ function setupWebSocket() {
         if (currentTicketLiveView === ticketNumber) {
           renderView();
         }
+      } else if (data.type === 'TICKET_UPDATE') {
+        // Update or add ticket in tickets array
+        const updatedTicket = data.ticket;
+        const index = tickets.findIndex(t => t.ticketNumber === updatedTicket.ticketNumber);
+        if (index !== -1) {
+          tickets[index] = updatedTicket;
+        } else {
+          tickets.push(updatedTicket);
+        }
+        updateTicketDashboardStats();
+        renderView();
       }
     } catch (e) {
       console.error('WebSocket parse error:', e);
@@ -807,6 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   renderView();
   setupWebSocket();
+  fetchFormQuestions();
 
   // Fetch initial data for the connected guild if any
   if (connectedGuildId) {
@@ -822,12 +1178,16 @@ document.addEventListener('DOMContentLoaded', () => {
 window.toggleCollapsible = toggleCollapsible;
 window.showTicketsOptions = showTicketsOptions;
 window.showSettingsOptions = showSettingsOptions;
+window.showAIOptions = showAIOptions;
 window.showTicketDashboard = showTicketDashboard;
 window.showAllTickets = showAllTickets;
 window.showOpenTickets = showOpenTickets;
 window.showClosedTickets = showClosedTickets;
 window.showIntegrations = showIntegrations;
 window.showBotSettings = showBotSettings;
+window.showFormSetup = showFormSetup;
+window.showKnowledgeDatabase = showKnowledgeDatabase;
+window.showTraining = showTraining;
 window.logout = logout;
 window.onChannelSelectChange = onChannelSelectChange;
 window.onEmbedInputChange = onEmbedInputChange;
@@ -835,31 +1195,191 @@ window.previewEmbed = previewEmbed;
 window.goBackToDashboard = goBackToDashboard;
 window.deployEmbed = deployEmbed;
 
-// New functions for live ticket view
-window.openTicketLiveView = function(ticketNumber) {
-  // Normalize ticketNumber to string with leading zeros length 4
-  ticketNumber = ticketNumber.toString().padStart(4, '0');
-  currentTicketLiveView = ticketNumber;
-  // Fetch initial messages for the ticket
-  fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch ticket messages');
-      return res.json();
-    })
+// Add source modal functions
+function showUploadSourceModal() {
+  const modal = document.getElementById('uploadSourceModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  const sourceTypeSelect = document.getElementById('sourceType');
+  const sourceInputContainer = document.getElementById('sourceInputContainer');
+  const pdfUploadContainer = document.getElementById('pdfUploadContainer');
+  const textBlockContainer = document.getElementById('textBlockContainer');
+
+  function updateInputVisibility() {
+    const selectedType = sourceTypeSelect.value;
+    sourceInputContainer.style.display = selectedType === 'webUrl' ? 'block' : 'none';
+    pdfUploadContainer.style.display = selectedType === 'pdf' ? 'block' : 'none';
+    textBlockContainer.style.display = selectedType === 'textBlock' ? 'block' : 'none';
+  }
+
+  sourceTypeSelect.addEventListener('change', updateInputVisibility);
+  updateInputVisibility();
+
+  const form = document.getElementById('uploadSourceForm');
+  form.onsubmit = function(event) {
+    event.preventDefault();
+
+    const selectedType = sourceTypeSelect.value;
+    let newSource = { type: selectedType };
+
+    if (selectedType === 'webUrl') {
+      const url = document.getElementById('sourceInput').value.trim();
+      if (!url) {
+        alert('Please enter a valid URL.');
+        return;
+      }
+      newSource.url = url;
+      newSource.name = url;
+    } else if (selectedType === 'textBlock') {
+      const text = document.getElementById('textBlock').value.trim();
+      if (!text) {
+        alert('Please enter some text.');
+        return;
+      }
+      newSource.text = text;
+      newSource.name = text.substring(0, 30) + (text.length > 30 ? '...' : '');
+    } else if (selectedType === 'pdf') {
+      const fileInput = document.getElementById('pdfFile');
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please select a PDF file.');
+        return;
+      }
+      const file = fileInput.files[0];
+      newSource.fileName = file.name;
+      // Read file as base64 string
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        newSource.data = e.target.result;
+        saveNewSource(newSource);
+      };
+      reader.readAsDataURL(file);
+      return; // Wait for async read
+    }
+
+    saveNewSource(newSource);
+  };
+}
+
+function hideUploadSourceModal() {
+  const modal = document.getElementById('uploadSourceModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+}
+
+function saveNewSource(source) {
+  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
+  sources.push(source);
+  localStorage.setItem('aiKnowledgeSources', JSON.stringify(sources));
+  hideUploadSourceModal();
+  renderView();
+}
+
+function removeSource(index) {
+  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
+  sources.splice(index, 1);
+  localStorage.setItem('aiKnowledgeSources', JSON.stringify(sources));
+  renderView();
+}
+
+// Form questions management functions
+function addFormQuestion() {
+  const questionInput = document.getElementById('newQuestionInput');
+  const question = questionInput.value.trim();
+  if (!question) {
+    alert('Please enter a question');
+    return;
+  }
+  
+  const newQuestion = {
+    id: 'q' + Date.now(),
+    question: question,
+    placeholder: '',
+    min: 0,
+    max: 500,
+    required: false,
+    multiline: false
+  };
+  
+  formQuestions.push(newQuestion);
+  window.formQuestions = formQuestions;
+  questionInput.value = '';
+  saveFormQuestions();
+  renderView();
+}
+
+function removeFormQuestion(index) {
+  formQuestions.splice(index, 1);
+  window.formQuestions = formQuestions;
+  saveFormQuestions();
+  renderView();
+}
+
+function saveFormQuestions() {
+  fetch(`${API_BASE}/api/form-questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ questions: formQuestions })
+  })
+    .then(res => res.json())
     .then(data => {
-      ticketMessages[ticketNumber] = data || [];
-      currentView = 'ticketLiveView';
+      if (!data.success) {
+        console.error('Failed to save form questions:', data.error);
+      }
+    })
+    .catch(err => {
+      console.error('Error saving form questions:', err);
+    });
+}
+
+function fetchFormQuestions() {
+  fetch(`${API_BASE}/api/form-questions`)
+    .then(res => res.json())
+    .then(data => {
+      formQuestions = data || [];
+      window.formQuestions = formQuestions;
       renderView();
     })
     .catch(err => {
-      ticketMessages[ticketNumber] = [];
-      currentView = 'ticketLiveView';
-      renderView();
+      console.error('Error fetching form questions:', err);
+      formQuestions = [];
+      window.formQuestions = formQuestions;
     });
-};
+}
 
-window.closeTicketLiveView = function() {
-  currentTicketLiveView = null;
-  currentView = 'allTickets'; // or previous view if you want to track it
+function updateFormQuestion(index, field, value) {
+  console.log(`updateFormQuestion called with index=${index}, field=${field}, value=`, value);
+  if (index < 0 || index >= formQuestions.length) return;
+  const question = formQuestions[index];
+  if (!question) return;
+
+  if (field === 'min' || field === 'max') {
+    const num = parseInt(value, 10);
+    question[field] = isNaN(num) ? 0 : num;
+  } else if (field === 'required' || field === 'multiline') {
+    question[field] = !!value;
+  } else {
+    question[field] = value;
+  }
+
+  formQuestions[index] = question;
+  window.formQuestions = formQuestions;
+  // Removed automatic saveFormQuestions call here to avoid redundant saves
   renderView();
-};
+}
+
+function syncFormQuestions() {
+  saveFormQuestions();
+  alert('Form questions synced to the bot successfully.');
+}
+
+window.syncFormQuestions = syncFormQuestions;
+
+// Add to window object for inline handlers
+window.showUploadSourceModal = showUploadSourceModal;
+window.hideUploadSourceModal = hideUploadSourceModal;
+window.removeSource = removeSource;
+window.addFormQuestion = addFormQuestion;
+window.removeFormQuestion = removeFormQuestion;
+window.updateFormQuestion = updateFormQuestion;
+window.formQuestions = formQuestions;
