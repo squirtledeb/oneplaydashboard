@@ -436,10 +436,11 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isModalSubmit()) {
       console.log('Modal submit interaction received with customId:', interaction.customId);
       if (interaction.customId.startsWith('submit_ticket_form')) {
+        await interaction.deferReply({ ephemeral: true });
         const guildId = interaction.guild.id;
         const userId = interaction.user.id;
         
-        // Get form responses
+        // Get fresh form responses object
         const responses = {};
         formQuestions.forEach(q => {
           responses[q.id] = interaction.fields.getTextInputValue(q.id);
@@ -548,17 +549,14 @@ client.on('interactionCreate', async (interaction) => {
             components: [closeButton]
           });
 
-          await interaction.reply({
-            content: `Your ticket has been created: <#${channel.id}>`,
-            flags: 64
+          await interaction.editReply({
+            content: `Your ticket has been created: <#${channel.id}>`
           });
 
           // Delete the ephemeral reply after 5 seconds
           setTimeout(async () => {
             try {
-              if (interaction.deferred || interaction.replied) {
-                await interaction.deleteReply();
-              }
+              await interaction.deleteReply();
             } catch (err) {
               // Ignore errors if reply already deleted or cannot be deleted
             }
@@ -743,18 +741,17 @@ client.on('interactionCreate', async (interaction) => {
               const loggingChannelId = loggingChannelSettings[guildId];
               if (loggingChannelId) {
                 const logChannel = await client.channels.fetch(loggingChannelId);
-                  if (logChannel) {
-                    // Include panel name from embedTitle in the log embed
-                    const embed = new EmbedBuilder()
-                      .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
-                      .setColor('#FFD700')
-                      .addFields(
-                        { name: 'Logged Info', value: `Ticket: Closed-${ticketNumber}\nAction: Closed`, inline: true },
-                        { name: 'Panel', value: panelConfigs[guildId]?.[activeTickets[guildId][ticketNumber].channelId]?.title || 'Unknown Panel', inline: true }
-                      );
-                   // Removed timestamp to avoid showing time in embed
-                   await logChannel.send({ embeds: [embed] });
-                 }
+                if (logChannel) {
+                  const embed = new EmbedBuilder()
+                    .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+                    .setColor('#FFD700')
+                    .addFields(
+                      { name: 'Logged Info', value: `Ticket: Closed-${ticketNumber}\nAction: Closed`, inline: true },
+                      { name: 'Panel', value: 'OnePlay General Support', inline: true }
+                    );
+                  // Removed timestamp to avoid showing time in embed
+                  await logChannel.send({ embeds: [embed] });
+                }
               }
             } catch (err) {
               console.error('Error sending log embed:', err);
@@ -851,6 +848,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       } else if (interaction.customId === 'open_ticket') {
         try {
+          await interaction.deferUpdate();
           const guildId = interaction.guild.id;
           const channelId = interaction.channel.id;
           let ticketNumber = null;
@@ -899,13 +897,12 @@ client.on('interactionCreate', async (interaction) => {
               if (loggingChannelId) {
                 const logChannel = await client.channels.fetch(loggingChannelId);
                 if (logChannel) {
-                  // Include panel name from embedTitle in the log embed
                   const embed = new EmbedBuilder()
                     .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
                     .setColor('#00FF00')
                     .addFields(
                       { name: 'Logged Info', value: `Ticket-${ticketNumber}\nAction: Opened`, inline: true },
-                      { name: 'Panel', value: panelConfigs[guildId]?.[activeTickets[guildId][ticketNumber].channelId]?.title || 'Unknown Panel', inline: true }
+                      { name: 'Panel', value: 'OnePlay General Support', inline: true }
                     );
                   // Removed timestamp to avoid showing time in embed
                   await logChannel.send({ embeds: [embed] });
@@ -937,22 +934,112 @@ client.on('interactionCreate', async (interaction) => {
               await channel.send({ embeds: [embed] });
             }
 
-            await interaction.update({
-              content: '',
-              components: []
-            });
+            try {
+              await interaction.editReply({
+                content: '',
+                components: []
+              });
+            } catch (err) {
+              console.error('Error editing reply after reopening ticket:', err);
+            }
           } else {
-            await interaction.update({
-              content: 'Unable to find ticket information. Please reopen it manually.',
-              components: []
-            });
+            try {
+              await interaction.editReply({
+                content: 'Unable to find ticket information. Please reopen it manually.',
+                components: []
+              });
+            } catch (err) {
+              console.error('Error editing reply after missing ticket info:', err);
+            }
           }
         } catch (error) {
           console.error('Error reopening ticket:', error);
-          await interaction.update({
-            content: 'There was an error reopening this ticket.',
-            components: []
-          });
+          try {
+            await interaction.editReply({
+              content: 'There was an error reopening this ticket.',
+              components: []
+            });
+          } catch (err) {
+            console.error('Error editing reply after reopen error:', err);
+          }
+        }
+      }
+        try {
+          const guildId = interaction.guild.id;
+          const channelId = interaction.channel.id;
+          let ticketNumber = null;
+          if (activeTickets[guildId]) {
+            for (const tNum in activeTickets[guildId]) {
+              if (activeTickets[guildId][tNum].channelId === channelId) {
+                ticketNumber = tNum;
+                break;
+              }
+            }
+          }
+          if (!ticketNumber) {
+            await interaction.update({
+              content: 'Unable to find ticket information. Please delete it manually.',
+              components: []
+            });
+            return;
+          }
+
+          // Removed the intermediate message update to delete silently after 5 seconds
+          // await interaction.update({
+          //   content: 'Deleting ticket in 5 seconds...',
+          //   components: []
+          // });
+
+          setTimeout(async () => {
+            try {
+              const channel = await client.channels.fetch(channelId);
+              if (channel) {
+                await channel.delete('Ticket deleted by user');
+              }
+              if (activeTickets[guildId]) {
+                delete activeTickets[guildId][ticketNumber];
+              }
+
+              // Send embed log to logging channel if configured
+              try {
+                const loggingChannelId = loggingChannelSettings[guildId];
+                if (loggingChannelId) {
+                  const logChannel = await client.channels.fetch(loggingChannelId);
+                  if (logChannel) {
+                    const embed = new EmbedBuilder()
+                      .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+                      .setColor('#FF0000')
+                      .addFields(
+                        { name: 'Logged Info', value: `Ticket: Ticket-${ticketNumber}\nAction: Deleted`, inline: true },
+                        { name: 'Panel', value: panelConfigs[guildId]?.[channelId]?.title || 'OnePlay General Support', inline: true }
+                      );
+                    await logChannel.send({ embeds: [embed] });
+                  }
+                }
+              } catch (err) {
+                console.error('Error sending delete log embed:', err);
+              }
+
+              broadcastUpdate({
+                type: 'TICKET_UPDATE',
+                guildId: guildId,
+                ticketNumber: ticketNumber,
+                ticket: null
+              });
+            } catch (error) {
+              console.error('Error deleting ticket channel:', error);
+            }
+          }, 5000);
+        } catch (error) {
+          console.error('Error handling delete_ticket interaction:', error);
+          try {
+            await interaction.update({
+              content: 'There was an error deleting this ticket.',
+              components: []
+            });
+          } catch (editError) {
+            console.error('Error updating interaction after delete error:', editError);
+          }
         }
       }
     }
