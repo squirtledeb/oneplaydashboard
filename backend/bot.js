@@ -757,7 +757,7 @@ const { PassThrough } = require('stream');
 // Helper function to handle AI reply generation and posting with streaming using OpenAI client library
 async function handleAIReply(guildId, ticketNumber, userMessage) {
   try {
-    // Extract relevant context from knowledge base
+    // Extract relevant context for the user message
     const context = await aiService.extractKnowledgeContext(userMessage);
 
     // Construct prompt with context and user message

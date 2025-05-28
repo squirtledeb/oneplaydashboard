@@ -1,8 +1,3 @@
-// =====================
-// DASHBOARD.JS (FULL VERSION, FIXED DEPLOY EMBED PAYLOAD STRUCTURE)
-// =====================
-
-
 // --- CONFIGURATION ---
 const API_BASE = 'http://localhost:4000';
 
@@ -28,9 +23,6 @@ let currentTicketLiveView = null; // New state: currently viewed ticket in live 
 let ticketMessages = {}; // Store messages per ticket for live view
 let formQuestions = []; // Store form questions
 let autoDisplayFormResults = false; // New state for auto display toggle
-
-
-
 
 function disconnectDiscord() {
   manualDisconnect = true;
@@ -72,12 +64,6 @@ function showSettingsOptions(event) {
   currentSidebarContent = 'settings';
   renderView();
 }
-function showAIOptions(event) {
-  event.preventDefault();
-  currentSidebarContent = 'ai';
-  currentView = 'knowledgeDatabase';
-  renderView();
-}
 function showTicketDashboard(event) {
   event.preventDefault();
   currentView = 'ticketDashboard';
@@ -111,21 +97,6 @@ function showBotSettings(event) {
 function showFormSetup(event) {
   event.preventDefault();
   currentView = 'formSetup';
-  renderView();
-}
-function showKnowledgeDatabase(event) {
-  event.preventDefault();
-  currentView = 'knowledgeDatabase';
-  renderView();
-}
-function showTraining(event) {
-  event.preventDefault();
-  currentView = 'training';
-  renderView();
-}
-function showAISettings(event) {
-  event.preventDefault();
-  currentView = 'aiSettings';
   renderView();
 }
 function goBackToDashboard() {
@@ -250,10 +221,10 @@ function renderDashboardContent() {
             ${ticketActivity.map(t => `
               <tr>
                 <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
-          <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
-          <td class="px-6 py-4 whitespace-nowrap">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
-          </td>
+                <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
+                </td>
               </tr>
             `).join('')}
           </tbody>
@@ -611,95 +582,6 @@ window.fetchFormQuestions = function() {
   });
 };
 
-function renderKnowledgeDatabaseContent() {
-  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
-
-  return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Knowledge Database</h1>
-    <p class="text-gray-600 mb-4">Add any website, Gitbook, PDF or create a custom text block.</p>
-    <div class="p-4 border border-gray-300 rounded-md bg-white">
-      ${sources.length === 0 ? '<p class="text-gray-500">No sources uploaded yet.</p>' : ''}
-      <ul class="list-disc list-inside space-y-1">
-        ${sources.map((source, index) => `
-          <li>
-            <span>${source.type}: ${source.name || source.url || 'Unnamed'}</span>
-            <button onclick="removeSource(${index})" class="ml-2 text-red-600 hover:text-red-800">Remove</button>
-          </li>
-        `).join('')}
-      </ul>
-      <button onclick="showUploadSourceModal()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">Upload Sources</button>
-    </div>
-    <div id="uploadSourceModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-      <div class="bg-white rounded-lg p-6 w-full max-w-lg">
-        <h2 class="text-xl font-bold mb-4">Add New Source</h2>
-        <form id="uploadSourceForm" class="space-y-4">
-          <div>
-            <label for="sourceType" class="block text-sm font-medium text-gray-700 mb-1">Source Type</label>
-            <select id="sourceType" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-              <option value="webUrl">Web URL</option>
-              <option value="textBlock">Write Text Block</option>
-              <option value="pdf">Upload PDF</option>
-            </select>
-          </div>
-          <div id="sourceInputContainer">
-            <label for="sourceInput" class="block text-sm font-medium text-gray-700 mb-1">URL</label>
-            <input type="text" id="sourceInput" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter URL" />
-          </div>
-          <div id="pdfUploadContainer" class="hidden">
-            <label for="pdfFile" class="block text-sm font-medium text-gray-700 mb-1">Select PDF File</label>
-            <input type="file" id="pdfFile" accept="application/pdf" class="w-full" />
-          </div>
-          <div id="textBlockContainer" class="hidden">
-            <label for="textBlock" class="block text-sm font-medium text-gray-700 mb-1">Text Block</label>
-            <textarea id="textBlock" rows="5" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter text"></textarea>
-          </div>
-          <div class="flex justify-end space-x-4">
-            <button type="button" onclick="hideUploadSourceModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Cancel</button>
-            <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Add Source</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  `;
-}
-function renderTrainingContent() {
-  return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">Training</h1>
-    <div class="p-6 bg-blue-50 rounded-lg border border-blue-200">
-      <p class="text-blue-700">Yet to be implemented</p>
-    </div>
-  `;
-}
-
-function renderAISettings() {
-  const token = localStorage.getItem('aiBotToken') || '';
-  const model = localStorage.getItem('aiModel') || 'gpt-3.5-turbo';
-
-  const supportedModels = [
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    { value: 'gpt-3.5-turbo-16k', label: 'GPT-3.5 Turbo 16k' },
-    { value: 'gpt-4', label: 'GPT-4' },
-    { value: 'gpt-4-32k', label: 'GPT-4 32k' },
-    { value: 'text-davinci-003', label: 'Text Davinci 003' }
-  ];
-
-  return `
-    <h1 class="text-2xl font-bold mb-6 text-gray-800">AI Settings</h1>
-    <div class="mb-6">
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="aiBotToken">Bot Token</label>
-      <input type="text" id="aiBotToken" value="${token}" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter your AI bot token" />
-    </div>
-    <div class="mb-6">
-      <label class="block text-sm font-medium text-gray-700 mb-1" for="aiModel">Model</label>
-      <select id="aiModel" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-        ${supportedModels.map(m => `
-          <option value="${m.value}"${model === m.value ? ' selected' : ''}>${m.label}</option>
-        `).join('')}
-      </select>
-    </div>
-  `;
-}
-
 function formatDateTime(date) {
   if (!date) return '';
   const d = new Date(date);
@@ -760,18 +642,6 @@ const renderDashboard = function() {
                     Settings
                   </a>
                 </li>
-<li>
-  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showAIOptions(event)">
-    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <rect x="6" y="3" width="12" height="18" rx="2" ry="2" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"></rect>
-      <circle cx="12" cy="8" r="1" stroke-linejoin="round" stroke-linecap="round" stroke-width="2"></circle>
-      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M9 21v-2h6v2"></path>
-      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M8 11h8"></path>
-      <path stroke-linejoin="round" stroke-linecap="round" stroke-width="2" d="M8 15h8"></path>
-    </svg>
-    AI
-  </a>
-</li>
               </ul>
             </nav>
           </div>
@@ -810,12 +680,7 @@ const renderDashboard = function() {
                   currentView === 'botSetup' ? renderBotSetup() :
                   currentView === 'formSetup' ? renderFormSetupView() :
                   renderSettingsDashboardContent())
-                : (currentSidebarContent === 'ai'
-                  ? (currentView === 'knowledgeDatabase' ? renderKnowledgeDatabaseContent() :
-                    currentView === 'training' ? renderTrainingContent() :
-                    currentView === 'aiSettings' ? renderAISettings() :
-                    renderKnowledgeDatabaseContent())
-                  : renderDashboardContent()))
+                : renderDashboardContent())
           }
         </div>
       </div>
@@ -836,15 +701,9 @@ function getSidebarContent() {
       <li><a href="#" onclick="window.showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Panel Config</a></li>
       <li><a href="#" onclick="window.showFormSetup(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Form Setup</a></li>
     `;
-  } else if (currentSidebarContent === 'ai') {
-    return `
-      <li><a href="#" onclick="window.showKnowledgeDatabase(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Knowledge Data base</a></li>
-      <li><a href="#" onclick="window.showTraining(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Training</a></li>
-    `;
   }
   return `<li class="text-gray-700">No quick options available.</li>`;
 }
-
 
 function renderTicketLiveViewContent() {
   if (!currentTicketLiveView) return '<p>No ticket selected.</p>';
@@ -1178,7 +1037,6 @@ document.addEventListener('DOMContentLoaded', () => {
 window.toggleCollapsible = toggleCollapsible;
 window.showTicketsOptions = showTicketsOptions;
 window.showSettingsOptions = showSettingsOptions;
-window.showAIOptions = showAIOptions;
 window.showTicketDashboard = showTicketDashboard;
 window.showAllTickets = showAllTickets;
 window.showOpenTickets = showOpenTickets;
@@ -1186,101 +1044,12 @@ window.showClosedTickets = showClosedTickets;
 window.showIntegrations = showIntegrations;
 window.showBotSettings = showBotSettings;
 window.showFormSetup = showFormSetup;
-window.showKnowledgeDatabase = showKnowledgeDatabase;
-window.showTraining = showTraining;
 window.logout = logout;
 window.onChannelSelectChange = onChannelSelectChange;
 window.onEmbedInputChange = onEmbedInputChange;
 window.previewEmbed = previewEmbed;
 window.goBackToDashboard = goBackToDashboard;
 window.deployEmbed = deployEmbed;
-
-// Add source modal functions
-function showUploadSourceModal() {
-  const modal = document.getElementById('uploadSourceModal');
-  if (!modal) return;
-  modal.classList.remove('hidden');
-
-  const sourceTypeSelect = document.getElementById('sourceType');
-  const sourceInputContainer = document.getElementById('sourceInputContainer');
-  const pdfUploadContainer = document.getElementById('pdfUploadContainer');
-  const textBlockContainer = document.getElementById('textBlockContainer');
-
-  function updateInputVisibility() {
-    const selectedType = sourceTypeSelect.value;
-    sourceInputContainer.style.display = selectedType === 'webUrl' ? 'block' : 'none';
-    pdfUploadContainer.style.display = selectedType === 'pdf' ? 'block' : 'none';
-    textBlockContainer.style.display = selectedType === 'textBlock' ? 'block' : 'none';
-  }
-
-  sourceTypeSelect.addEventListener('change', updateInputVisibility);
-  updateInputVisibility();
-
-  const form = document.getElementById('uploadSourceForm');
-  form.onsubmit = function(event) {
-    event.preventDefault();
-
-    const selectedType = sourceTypeSelect.value;
-    let newSource = { type: selectedType };
-
-    if (selectedType === 'webUrl') {
-      const url = document.getElementById('sourceInput').value.trim();
-      if (!url) {
-        alert('Please enter a valid URL.');
-        return;
-      }
-      newSource.url = url;
-      newSource.name = url;
-    } else if (selectedType === 'textBlock') {
-      const text = document.getElementById('textBlock').value.trim();
-      if (!text) {
-        alert('Please enter some text.');
-        return;
-      }
-      newSource.text = text;
-      newSource.name = text.substring(0, 30) + (text.length > 30 ? '...' : '');
-    } else if (selectedType === 'pdf') {
-      const fileInput = document.getElementById('pdfFile');
-      if (!fileInput.files || fileInput.files.length === 0) {
-        alert('Please select a PDF file.');
-        return;
-      }
-      const file = fileInput.files[0];
-      newSource.fileName = file.name;
-      // Read file as base64 string
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        newSource.data = e.target.result;
-        saveNewSource(newSource);
-      };
-      reader.readAsDataURL(file);
-      return; // Wait for async read
-    }
-
-    saveNewSource(newSource);
-  };
-}
-
-function hideUploadSourceModal() {
-  const modal = document.getElementById('uploadSourceModal');
-  if (!modal) return;
-  modal.classList.add('hidden');
-}
-
-function saveNewSource(source) {
-  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
-  sources.push(source);
-  localStorage.setItem('aiKnowledgeSources', JSON.stringify(sources));
-  hideUploadSourceModal();
-  renderView();
-}
-
-function removeSource(index) {
-  const sources = JSON.parse(localStorage.getItem('aiKnowledgeSources') || '[]');
-  sources.splice(index, 1);
-  localStorage.setItem('aiKnowledgeSources', JSON.stringify(sources));
-  renderView();
-}
 
 // Form questions management functions
 function addFormQuestion() {
@@ -1376,9 +1145,6 @@ function syncFormQuestions() {
 window.syncFormQuestions = syncFormQuestions;
 
 // Add to window object for inline handlers
-window.showUploadSourceModal = showUploadSourceModal;
-window.hideUploadSourceModal = hideUploadSourceModal;
-window.removeSource = removeSource;
 window.addFormQuestion = addFormQuestion;
 window.removeFormQuestion = removeFormQuestion;
 window.updateFormQuestion = updateFormQuestion;
