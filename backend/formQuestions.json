@@ -4,7 +4,7 @@
       "id": "issue",
       "question": "Enter OnePlay registered Mobile number:",
       "placeholder": "Enter 10 Digit Mobile Number",
-      "required": true,
+      "required": false,
       "min": 10,
       "max": 10
     },

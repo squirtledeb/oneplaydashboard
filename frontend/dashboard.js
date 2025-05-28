@@ -385,6 +385,15 @@ function renderBotSetup() {
             ).join('')}
           </select>
         </div>
+        <div class="mb-4">
+          <label for="loggingChannelSelect" class="block text-sm font-medium text-gray-700 mb-2">Select Log Channel</label>
+          <select id="loggingChannelSelect" class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" onchange="onLoggingChannelSelectChange(this)">
+            <option value="">-- Select a log channel --</option>
+            ${availableChannels.map(channel => 
+              `<option value="${channel.id}"${channel.id === selectedLoggingChannelId ? ' selected' : ''}>${channel.name}</option>`
+            ).join('')}
+          </select>
+        </div>
         <h3 class="text-lg font-medium mb-3 mt-6">Embedded Message Settings</h3>
         <div class="grid grid-cols-1 gap-4">
           <div>
@@ -422,6 +431,49 @@ function renderBotSetup() {
     </div>
   `;
 }
+
+let selectedLoggingChannelId = '';
+
+function onLoggingChannelSelectChange(select) {
+  selectedLoggingChannelId = select.value;
+  // Save the logging channel setting via API
+  if (!connectedGuildId) return;
+  fetch(`${API_BASE}/api/logging-channel/${connectedGuildId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channelId: selectedLoggingChannelId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (!data.success) {
+      alert('Failed to save logging channel setting.');
+    }
+  })
+  .catch(err => {
+    alert('Error saving logging channel setting: ' + err.message);
+  });
+}
+
+// Fetch current logging channel setting for the guild
+function fetchLoggingChannelForGuild(guildId) {
+  fetch(`${API_BASE}/api/logging-channel/${guildId}`)
+    .then(res => res.json())
+    .then(data => {
+      selectedLoggingChannelId = data.channelId || '';
+      renderView();
+    })
+    .catch(err => {
+      selectedLoggingChannelId = '';
+      renderView();
+    });
+}
+
+// Modify fetchChannelsForGuild to also fetch logging channel setting
+const originalFetchChannelsForGuild = fetchChannelsForGuild;
+fetchChannelsForGuild = function(guildId) {
+  originalFetchChannelsForGuild(guildId);
+  fetchLoggingChannelForGuild(guildId);
+};
 
 function renderFormSetupView() {
   return `

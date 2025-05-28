@@ -48,6 +48,10 @@ app.post('/api/form-questions', (req, res) => {
 const formSettingsPath = path.join(__dirname, 'formSettings.json');
 let formSettings = { autoDisplayFormResults: false };
 
+// New: Logging channel settings file path and default
+const loggingChannelSettingsPath = path.join(__dirname, 'loggingChannelSettings.json');
+let loggingChannelSettings = {};
+
 // Load form settings on startup
 try {
   if (fs.existsSync(formSettingsPath)) {
@@ -56,6 +60,16 @@ try {
 } catch (error) {
   console.error('Error loading form settings:', error);
   formSettings = { autoDisplayFormResults: false };
+}
+
+// Load logging channel settings on startup
+try {
+  if (fs.existsSync(loggingChannelSettingsPath)) {
+    loggingChannelSettings = JSON.parse(fs.readFileSync(loggingChannelSettingsPath, 'utf8'));
+  }
+} catch (error) {
+  console.error('Error loading logging channel settings:', error);
+  loggingChannelSettings = {};
 }
 
 // API to get auto display form results setting
@@ -76,6 +90,30 @@ app.post('/api/auto-display-form-results', (req, res) => {
   } catch (error) {
     console.error('Error saving form settings:', error);
     res.status(500).json({ error: 'Failed to save settings' });
+  }
+});
+
+// API to get logging channel for a guild
+app.get('/api/logging-channel/:guildId', (req, res) => {
+  const { guildId } = req.params;
+  const channelId = loggingChannelSettings[guildId] || '';
+  res.json({ channelId });
+});
+
+// API to set logging channel for a guild
+app.post('/api/logging-channel/:guildId', (req, res) => {
+  const { guildId } = req.params;
+  const { channelId } = req.body;
+  if (typeof channelId !== 'string') {
+    return res.status(400).json({ error: 'Invalid channelId' });
+  }
+  loggingChannelSettings[guildId] = channelId;
+  try {
+    fs.writeFileSync(loggingChannelSettingsPath, JSON.stringify(loggingChannelSettings, null, 2));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving logging channel settings:', error);
+    res.status(500).json({ error: 'Failed to save logging channel setting' });
   }
 });
 
@@ -102,6 +140,7 @@ const client = new Client({
 let connectedGuilds = [];
 let ticketChannels = {};
 let ticketCounters = {}; // { guildId: nextTicketNumber }
+let panelConfigs = {}; // Store panel configurations per guild/channel
 
 // Discord bot token from environment variable
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -196,13 +235,25 @@ app.get('/api/ticket-messages/:ticketNumber', (req, res) => {
 app.post('/api/deploy-embed', async (req, res) => {
   try {
     const { channelId, title, description, buttonLabel, color, parentCategoryId } = req.body;
+    
     if (!channelId || !title || !description || !buttonLabel) {
       return res.status(400).json({ error: 'Missing required fields', success: false });
     }
-    const channel = await client.channels.fetch(channelId);
-    if (!channel) {
+
+    // Store panel configuration
+    const channelObj = await client.channels.fetch(channelId);
+    if (!channelObj) {
       return res.status(404).json({ error: 'Channel not found', success: false });
     }
+    if (!panelConfigs[channelObj.guild.id]) {
+      panelConfigs[channelObj.guild.id] = {};
+    }
+    panelConfigs[channelObj.guild.id][channelId] = {
+      title,
+      parentCategoryId
+    };
+
+    const channel = channelObj;
     const permissions = channel.permissionsFor(client.user);
     if (!permissions.has('SendMessages') || !permissions.has('ViewChannel')) {
       return res.status(403).json({ error: 'Bot lacks required permissions in this channel', success: false });
@@ -431,6 +482,7 @@ client.on('interactionCreate', async (interaction) => {
           
           // Store ticket with form responses
           if (!activeTickets[guildId]) activeTickets[guildId] = {};
+          console.log(`Assigning panelTitle for ticket ${ticketNumber} in guild ${guildId}, channel ${channel.id}: ${panelConfigs[guildId]?.[channel.id]?.title}`);
           activeTickets[guildId][ticketNumber] = {
             ticketNumber,
             userId,
@@ -440,7 +492,8 @@ client.on('interactionCreate', async (interaction) => {
             lastUpdated: new Date(),
             dnd: false,
             formResponses: responses,
-            messages: []
+            messages: [],
+            panelTitle: panelConfigs[guildId]?.[channel.id]?.title || 'Unknown Panel'
           };
 
           // Create form responses embed if auto display is enabled
@@ -455,7 +508,6 @@ client.on('interactionCreate', async (interaction) => {
             const formEmbed = new EmbedBuilder()
               .setTitle('Ticket Information')
               .setColor('#5865F2')
-              //.setDescription(descriptionText)
               .addFields([
                 {
                   name: '\u200B',
@@ -463,18 +515,18 @@ client.on('interactionCreate', async (interaction) => {
                     if (formQuestions.length === 0) return '';
                     return formQuestions.map(q => {
                       let response = responses[q.id];
-                    if (response === undefined || response === null || response === '') {
-                      response = 'No response';
-                    }
-                    // Replace backticks in response to avoid breaking code block
-                    response = response.replace(/`/g, '\'');
-                    // Format response as inline code if single line, else plain text with escaped newlines
-                    if (response.includes('\n')) {
-                      response = response.replace(/\n/g, '\\n');
-                      return `**${q.question}**\n${response}`;
-                    } else {
-                      return `**${q.question}**\n\`\`\`\n${response}\n\`\`\``;
-                    }
+                      if (response === undefined || response === null || response === '') {
+                        response = 'No response';
+                      }
+                      // Replace backticks in response to avoid breaking code block
+                      response = response.replace(/`/g, '\'');
+                      // Format response as inline code if single line, else plain text with escaped newlines
+                      if (response.includes('\n')) {
+                        response = response.replace(/\n/g, '\\n');
+                        return `**${q.question}**\n${response}`;
+                      } else {
+                        return `**${q.question}**\n\`\`\`\n${response}\n\`\`\``;
+                      }
                     }).join('\n\n');
                   })(),
                   inline: false
@@ -538,8 +590,6 @@ client.on('interactionCreate', async (interaction) => {
             ticketNumber: ticketNumber,
             ticket: ticketWithUsername
           });
-
-
         } catch (error) {
           console.error('Error creating ticket:', error);
           if (error.stack) {
@@ -588,11 +638,6 @@ client.on('interactionCreate', async (interaction) => {
           let maxLength = (typeof q.max === 'number' && q.max > 0) ? q.max : undefined;
           const placeholder = q.placeholder || undefined;
 
-          // Removed logic that sets minLength to undefined when min and max are equal to show correct minLength in label
-          // if (minLength !== undefined && maxLength !== undefined && minLength === maxLength) {
-          //   minLength = undefined;
-          // }
-
           const textInput = new TextInputBuilder()
             .setCustomId(q.id)
             .setLabel(q.question.length > 45 ? q.question.substring(0, 45) : q.question)
@@ -617,6 +662,39 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.showModal(modal);
         return;
       } else if (interaction.customId === 'close_ticket') {
+        try {
+          // Send confirmation message with Close and Cancel buttons as a normal message visible to everyone
+          const row = new ActionRowBuilder()
+            .addComponents(
+              new ButtonBuilder()
+                .setCustomId('confirm_close')
+                .setLabel('Close')
+                .setStyle(ButtonStyle.Success),
+              new ButtonBuilder()
+                .setCustomId('cancel_close')
+                .setLabel('Cancel')
+                .setStyle(ButtonStyle.Danger)
+            );
+
+          await interaction.deferUpdate();
+
+          const channel = interaction.channel;
+          await channel.send({
+            content: 'Are you sure you would like to close this ticket?',
+            components: [row]
+          });
+        } catch (error) {
+          console.error('Error sending close confirmation:', error);
+          try {
+            await interaction.followUp({
+              content: 'There was an error processing your request.',
+              components: []
+            });
+          } catch (editError) {
+            console.error('Error following up after close confirmation error:', editError);
+          }
+        }
+      } else if (interaction.customId === 'confirm_close') {
         try {
           const guildId = interaction.guild.id;
           const channelId = interaction.channel.id;
@@ -660,26 +738,220 @@ client.on('interactionCreate', async (interaction) => {
               ticket: ticketWithUsername
             });
 
-            await interaction.reply({
-              content: 'This ticket has been closed. The channel will be deleted in 5 seconds...',
-              flags: 64
+            // Send embed log to logging channel if configured
+            try {
+              const loggingChannelId = loggingChannelSettings[guildId];
+              if (loggingChannelId) {
+                const logChannel = await client.channels.fetch(loggingChannelId);
+                  if (logChannel) {
+                    // Include panel name from embedTitle in the log embed
+                    const embed = new EmbedBuilder()
+                      .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+                      .setColor('#FFD700')
+                      .addFields(
+                        { name: 'Logged Info', value: `Ticket: Closed-${ticketNumber}\nAction: Closed`, inline: true },
+                        { name: 'Panel', value: panelConfigs[guildId]?.[activeTickets[guildId][ticketNumber].channelId]?.title || 'Unknown Panel', inline: true }
+                      );
+                   // Removed timestamp to avoid showing time in embed
+                   await logChannel.send({ embeds: [embed] });
+                 }
+              }
+            } catch (err) {
+              console.error('Error sending log embed:', err);
+            }
+
+            // Send ticket closed message with controls in ticket channel
+            try {
+              const channel = await client.channels.fetch(activeTickets[guildId][ticketNumber].channelId);
+              if (channel) {
+                const closedByMessage = `Ticket Closed by <@${interaction.user.id}>`;
+                const controlsRow = new ActionRowBuilder()
+                  .addComponents(
+                    new ButtonBuilder()
+                      .setCustomId('transcript_ticket')
+                      .setLabel('Transcript')
+                      .setStyle(ButtonStyle.Secondary)
+                      .setEmoji('📄'),
+                    new ButtonBuilder()
+                      .setCustomId('open_ticket')
+                      .setLabel('Open')
+                      .setStyle(ButtonStyle.Success)
+                      .setEmoji('🔓'),
+                    new ButtonBuilder()
+                      .setCustomId('delete_ticket')
+                      .setLabel('Delete')
+                      .setStyle(ButtonStyle.Danger)
+                      .setEmoji('⛔')
+                  );
+                // Send embed message "Ticket Closed by @user" above support team ticket controls
+                const closedEmbed = new EmbedBuilder()
+                  .setColor('#FFD700')
+                  .setDescription(`Ticket Closed by <@${interaction.user.id}>`);
+                await channel.send({ embeds: [closedEmbed] });
+
+                // Add smaller font size to the code block to make it smaller
+                // Discord does not support font size in code blocks, so use inline code instead
+                // So change from triple backticks to single backticks for smaller text
+                await channel.send({ content: '`Support team ticket controls`', components: [controlsRow] });
+              }
+            } catch (err) {
+              console.error('Error sending ticket closed controls:', err);
+            }
+
+            await interaction.update({
+              content: 'This ticket has been closed.',
+              components: []
             });
-            setTimeout(async () => {
-              try {
-                await interaction.channel.delete();
-              } catch (err) {}
-            }, 5000);
+
+            // Delete the ephemeral confirmation message
+            try {
+              await interaction.deleteReply();
+            } catch (err) {
+              console.error('Error deleting ephemeral confirmation message:', err);
+            }
           } else {
-            await interaction.reply({
+            await interaction.update({
               content: 'Unable to find ticket information. Please close it manually.',
-              flags: 64
+              components: []
             });
           }
         } catch (error) {
           console.error('Error closing ticket:', error);
-          await interaction.reply({
-            content: 'There was an error closing this ticket.',
-            flags: 64
+          try {
+            await interaction.update({
+              content: 'There was an error closing this ticket.',
+              components: []
+            });
+          } catch (editError) {
+            console.error('Error editing reply after close ticket error:', editError);
+          }
+        }
+      } else if (interaction.customId === 'cancel_close') {
+        try {
+          await interaction.update({
+            content: 'Ticket close cancelled.',
+            components: []
+          });
+        } catch (error) {
+          console.error('Error cancelling ticket close:', error);
+          try {
+            await interaction.editReply({
+              content: 'There was an error cancelling the ticket close.',
+              components: []
+            });
+          } catch (editError) {
+            console.error('Error editing reply after cancel close error:', editError);
+          }
+        }
+        // Delete the ephemeral confirmation message after updating
+        try {
+          await interaction.deleteReply();
+        } catch (err) {
+          console.error('Error deleting ephemeral confirmation message:', err);
+        }
+      } else if (interaction.customId === 'open_ticket') {
+        try {
+          const guildId = interaction.guild.id;
+          const channelId = interaction.channel.id;
+          let ticketNumber = null;
+          if (activeTickets[guildId]) {
+            for (const tNum in activeTickets[guildId]) {
+              if (activeTickets[guildId][tNum].channelId === channelId) {
+                ticketNumber = tNum;
+                break;
+              }
+            }
+          }
+          if (ticketNumber) {
+            activeTickets[guildId][ticketNumber].status = 'active';
+            activeTickets[guildId][ticketNumber].lastUpdated = new Date();
+
+            // Resolve username before broadcasting
+            let username = 'Unknown';
+            try {
+              const guild = client.guilds.cache.get(guildId);
+              if (guild) {
+                let member = guild.members.cache.get(activeTickets[guildId][ticketNumber].userId);
+                if (!member) {
+                  member = await guild.members.fetch(activeTickets[guildId][ticketNumber].userId);
+                }
+                if (member) {
+                  username = member.user.tag || member.user.username;
+                }
+              }
+            } catch (e) {
+              username = 'Unknown';
+            }
+            const ticketWithUsername = {
+              ...activeTickets[guildId][ticketNumber],
+              username
+            };
+            broadcastUpdate({
+              type: 'TICKET_UPDATE',
+              guildId: guildId,
+              ticketNumber: ticketNumber,
+              ticket: ticketWithUsername
+            });
+
+            // Send embed log to logging channel if configured
+            try {
+              const loggingChannelId = loggingChannelSettings[guildId];
+              if (loggingChannelId) {
+                const logChannel = await client.channels.fetch(loggingChannelId);
+                if (logChannel) {
+                  // Include panel name from embedTitle in the log embed
+                  const embed = new EmbedBuilder()
+                    .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+                    .setColor('#00FF00')
+                    .addFields(
+                      { name: 'Logged Info', value: `Ticket-${ticketNumber}\nAction: Opened`, inline: true },
+                      { name: 'Panel', value: panelConfigs[guildId]?.[activeTickets[guildId][ticketNumber].channelId]?.title || 'Unknown Panel', inline: true }
+                    );
+                  // Removed timestamp to avoid showing time in embed
+                  await logChannel.send({ embeds: [embed] });
+                }
+              }
+            } catch (err) {
+              console.error('Error sending log embed:', err);
+            }
+
+            // Fetch the ticket channel and send the embed message, remove support controls
+            const channel = await client.channels.fetch(channelId);
+            if (channel) {
+              // Remove support team ticket controls message and label if possible
+              // This requires fetching recent messages and deleting the relevant ones
+              try {
+                const messages = await channel.messages.fetch({ limit: 20 });
+                for (const message of messages.values()) {
+                  if (message.content === '`Support team ticket controls`' || message.content.startsWith('Ticket Closed by')) {
+                    await message.delete();
+                  }
+                }
+              } catch (err) {
+                console.error('Error deleting support controls messages:', err);
+              }
+
+              const embed = new EmbedBuilder()
+                .setColor('#00FF00')
+                .setDescription(`Ticket Opened by <@${interaction.user.id}>`);
+              await channel.send({ embeds: [embed] });
+            }
+
+            await interaction.update({
+              content: '',
+              components: []
+            });
+          } else {
+            await interaction.update({
+              content: 'Unable to find ticket information. Please reopen it manually.',
+              components: []
+            });
+          }
+        } catch (error) {
+          console.error('Error reopening ticket:', error);
+          await interaction.update({
+            content: 'There was an error reopening this ticket.',
+            components: []
           });
         }
       }
@@ -691,10 +963,10 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
     try {
-    await interaction.reply({
-      content: 'An error occurred while processing your request.',
-      flags: 64
-    });
+      await interaction.reply({
+        content: 'An error occurred while processing your request.',
+        flags: 64
+      });
     } catch (replyError) {
       console.error('Failed to send error reply:', replyError);
     }
