@@ -44,11 +44,11 @@ app.post('/api/form-questions', (req, res) => {
   }
 });
 
-// New: Form settings file path and default
+// Form settings file path and default
 const formSettingsPath = path.join(__dirname, 'formSettings.json');
 let formSettings = { autoDisplayFormResults: false };
 
-// New: Logging channel settings file path and default
+// Logging channel settings file path and default
 const loggingChannelSettingsPath = path.join(__dirname, 'loggingChannelSettings.json');
 let loggingChannelSettings = {};
 
@@ -621,7 +621,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         // Create modal with form questions
-        // Extract category ID from button customId
         const buttonCustomId = interaction.customId; // e.g. 'create_ticket:<categoryId>'
         const categoryId = buttonCustomId.split(':')[1] || '';
 
@@ -661,7 +660,6 @@ client.on('interactionCreate', async (interaction) => {
         return;
       } else if (interaction.customId === 'close_ticket') {
         try {
-          // Send confirmation message with Close and Cancel buttons as a normal message visible to everyone
           const row = new ActionRowBuilder()
             .addComponents(
               new ButtonBuilder()
@@ -709,7 +707,6 @@ client.on('interactionCreate', async (interaction) => {
             activeTickets[guildId][ticketNumber].status = 'closed';
             activeTickets[guildId][ticketNumber].lastUpdated = new Date();
 
-            // Resolve username before broadcasting
             let username = 'Unknown';
             try {
               const guild = client.guilds.cache.get(guildId);
@@ -736,7 +733,6 @@ client.on('interactionCreate', async (interaction) => {
               ticket: ticketWithUsername
             });
 
-            // Send embed log to logging channel if configured
             try {
               const loggingChannelId = loggingChannelSettings[guildId];
               if (loggingChannelId) {
@@ -749,7 +745,6 @@ client.on('interactionCreate', async (interaction) => {
                       { name: 'Logged Info', value: `Ticket: Closed-${ticketNumber}\nAction: Closed`, inline: true },
                       { name: 'Panel', value: 'OnePlay General Support', inline: true }
                     );
-                  // Removed timestamp to avoid showing time in embed
                   await logChannel.send({ embeds: [embed] });
                 }
               }
@@ -757,7 +752,6 @@ client.on('interactionCreate', async (interaction) => {
               console.error('Error sending log embed:', err);
             }
 
-            // Send ticket closed message with controls in ticket channel
             try {
               const channel = await client.channels.fetch(activeTickets[guildId][ticketNumber].channelId);
               if (channel) {
@@ -780,15 +774,10 @@ client.on('interactionCreate', async (interaction) => {
                       .setStyle(ButtonStyle.Danger)
                       .setEmoji('⛔')
                   );
-                // Send embed message "Ticket Closed by @user" above support team ticket controls
                 const closedEmbed = new EmbedBuilder()
                   .setColor('#FFD700')
                   .setDescription(`Ticket Closed by <@${interaction.user.id}>`);
                 await channel.send({ embeds: [closedEmbed] });
-
-                // Add smaller font size to the code block to make it smaller
-                // Discord does not support font size in code blocks, so use inline code instead
-                // So change from triple backticks to single backticks for smaller text
                 await channel.send({ content: '`Support team ticket controls`', components: [controlsRow] });
               }
             } catch (err) {
@@ -800,7 +789,6 @@ client.on('interactionCreate', async (interaction) => {
               components: []
             });
 
-            // Delete the ephemeral confirmation message
             try {
               await interaction.deleteReply();
             } catch (err) {
@@ -829,6 +817,11 @@ client.on('interactionCreate', async (interaction) => {
             content: 'Ticket close cancelled.',
             components: []
           });
+          try {
+            await interaction.deleteReply();
+          } catch (err) {
+            console.error('Error deleting ephemeral confirmation message:', err);
+          }
         } catch (error) {
           console.error('Error cancelling ticket close:', error);
           try {
@@ -839,12 +832,6 @@ client.on('interactionCreate', async (interaction) => {
           } catch (editError) {
             console.error('Error editing reply after cancel close error:', editError);
           }
-        }
-        // Delete the ephemeral confirmation message after updating
-        try {
-          await interaction.deleteReply();
-        } catch (err) {
-          console.error('Error deleting ephemeral confirmation message:', err);
         }
       } else if (interaction.customId === 'open_ticket') {
         try {
@@ -864,7 +851,6 @@ client.on('interactionCreate', async (interaction) => {
             activeTickets[guildId][ticketNumber].status = 'active';
             activeTickets[guildId][ticketNumber].lastUpdated = new Date();
 
-            // Resolve username before broadcasting
             let username = 'Unknown';
             try {
               const guild = client.guilds.cache.get(guildId);
@@ -891,7 +877,6 @@ client.on('interactionCreate', async (interaction) => {
               ticket: ticketWithUsername
             });
 
-            // Send embed log to logging channel if configured
             try {
               const loggingChannelId = loggingChannelSettings[guildId];
               if (loggingChannelId) {
@@ -904,7 +889,6 @@ client.on('interactionCreate', async (interaction) => {
                       { name: 'Logged Info', value: `Ticket-${ticketNumber}\nAction: Opened`, inline: true },
                       { name: 'Panel', value: 'OnePlay General Support', inline: true }
                     );
-                  // Removed timestamp to avoid showing time in embed
                   await logChannel.send({ embeds: [embed] });
                 }
               }
@@ -912,11 +896,8 @@ client.on('interactionCreate', async (interaction) => {
               console.error('Error sending log embed:', err);
             }
 
-            // Fetch the ticket channel and send the embed message, remove support controls
             const channel = await client.channels.fetch(channelId);
             if (channel) {
-              // Remove support team ticket controls message and label if possible
-              // This requires fetching recent messages and deleting the relevant ones
               try {
                 const messages = await channel.messages.fetch({ limit: 20 });
                 for (const message of messages.values()) {
@@ -933,37 +914,28 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription(`Ticket Opened by <@${interaction.user.id}>`);
               await channel.send({ embeds: [embed] });
             }
-
-            try {
-              await interaction.editReply({
-                content: '',
-                components: []
-              });
-            } catch (err) {
-              console.error('Error editing reply after reopening ticket:', err);
-            }
           } else {
             try {
-              await interaction.editReply({
+              await interaction.followUp({
                 content: 'Unable to find ticket information. Please reopen it manually.',
                 components: []
               });
             } catch (err) {
-              console.error('Error editing reply after missing ticket info:', err);
+              console.error('Error following up after missing ticket info:', err);
             }
           }
         } catch (error) {
           console.error('Error reopening ticket:', error);
           try {
-            await interaction.editReply({
+            await interaction.followUp({
               content: 'There was an error reopening this ticket.',
               components: []
             });
           } catch (err) {
-            console.error('Error editing reply after reopen error:', err);
+            console.error('Error following up after reopen error:', err);
           }
         }
-      }
+      } else if (interaction.customId === 'delete_ticket') {
         try {
           const guildId = interaction.guild.id;
           const channelId = interaction.channel.id;
@@ -984,12 +956,6 @@ client.on('interactionCreate', async (interaction) => {
             return;
           }
 
-          // Removed the intermediate message update to delete silently after 5 seconds
-          // await interaction.update({
-          //   content: 'Deleting ticket in 5 seconds...',
-          //   components: []
-          // });
-
           setTimeout(async () => {
             try {
               const channel = await client.channels.fetch(channelId);
@@ -1000,7 +966,6 @@ client.on('interactionCreate', async (interaction) => {
                 delete activeTickets[guildId][ticketNumber];
               }
 
-              // Send embed log to logging channel if configured
               try {
                 const loggingChannelId = loggingChannelSettings[guildId];
                 if (loggingChannelId) {
@@ -1030,6 +995,11 @@ client.on('interactionCreate', async (interaction) => {
               console.error('Error deleting ticket channel:', error);
             }
           }, 5000);
+
+          await interaction.update({
+            content: 'Deleting ticket in 5 seconds...',
+            components: []
+          });
         } catch (error) {
           console.error('Error handling delete_ticket interaction:', error);
           try {
@@ -1046,7 +1016,6 @@ client.on('interactionCreate', async (interaction) => {
   } catch (err) {
     console.error('Error handling interactionCreate event:', err);
     if (interaction.replied || interaction.deferred) {
-      // Interaction already replied or deferred, cannot reply again
       return;
     }
     try {
@@ -1081,7 +1050,6 @@ client.on('messageCreate', async (message) => {
 
     // Check if ticket is in DND mode
     if (activeTickets[guildId][ticketNumber].dnd) {
-      // Do not trigger AI reply if DND is active
       return;
     }
 
@@ -1132,7 +1100,6 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
         aiReply += content;
-        // Optionally, partial updates can be broadcast here for real-time UI updates
       }
     }
 
