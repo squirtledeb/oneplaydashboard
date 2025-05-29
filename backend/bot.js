@@ -497,6 +497,13 @@ client.on('interactionCreate', async (interaction) => {
             panelTitle: panelConfigs[guildId]?.[channel.id]?.title || 'Unknown Panel'
           };
 
+          // Immediately trigger AI reply with the 4th question response if available
+          const issueQuestionId = 'q1748382343618'; // 4th question id
+          const issueDescription = responses[issueQuestionId];
+          if (issueDescription && issueDescription.trim().length > 0) {
+            handleAIReply(guildId, ticketNumber, issueDescription.trim());
+          }
+
           // Create form responses embed if auto display is enabled
           const embedsToSend = [];
           if (formSettings.autoDisplayFormResults) {
