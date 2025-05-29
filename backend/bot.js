@@ -4,7 +4,12 @@ const bodyParser = require('body-parser');
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
+const { PassThrough } = require('stream');
 require('dotenv').config();
+
+// Debug environment variables
+console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
+console.log('DISCORD_BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? 'Set' : 'Not set');
 
 // Load form questions
 let formQuestions = [];
@@ -209,7 +214,6 @@ app.get('/api/tickets/:guildId', async (req, res) => {
           member = null;
         }
       }
-      // Use member.user.tag if available for better username display
       const username = member ? (member.user.tag || member.user.username) : 'Unknown';
       tickets.push({
         ...ticket,
@@ -240,7 +244,6 @@ app.post('/api/deploy-embed', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields', success: false });
     }
 
-    // Store panel configuration
     const channelObj = await client.channels.fetch(channelId);
     if (!channelObj) {
       return res.status(404).json({ error: 'Channel not found', success: false });
@@ -391,7 +394,6 @@ client.on('interactionCreate', async (interaction) => {
           activeTickets[guildId][ticketNumber].dnd = true;
           activeTickets[guildId][ticketNumber].lastUpdated = new Date();
 
-          // Optionally broadcast ticket update with DND status
           let username = 'Unknown';
           try {
             const guild = client.guilds.cache.get(guildId);
@@ -432,7 +434,6 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // Handle modal submissions
     if (interaction.isModalSubmit()) {
       console.log('Modal submit interaction received with customId:', interaction.customId);
       if (interaction.customId.startsWith('submit_ticket_form')) {
@@ -440,13 +441,11 @@ client.on('interactionCreate', async (interaction) => {
         const guildId = interaction.guild.id;
         const userId = interaction.user.id;
         
-        // Get fresh form responses object
         const responses = {};
         formQuestions.forEach(q => {
           responses[q.id] = interaction.fields.getTextInputValue(q.id);
         });
         
-        // Generate ticket number
         if (!ticketCounters[guildId]) ticketCounters[guildId] = 1;
         let ticketNumber = ticketCounters[guildId];
         ticketCounters[guildId]++;
@@ -454,7 +453,6 @@ client.on('interactionCreate', async (interaction) => {
         ticketNumber = ticketNumber.toString().padStart(4, '0');
         
         try {
-          // Create a new ticket channel
           const parentCategoryId = interaction.customId.split(':')[1] || null;
           console.log(`Creating ticket channel under category: ${parentCategoryId}`);
 
@@ -481,7 +479,6 @@ client.on('interactionCreate', async (interaction) => {
 
           const channel = await interaction.guild.channels.create(channelOptions);
           
-          // Store ticket with form responses
           if (!activeTickets[guildId]) activeTickets[guildId] = {};
           console.log(`Assigning panelTitle for ticket ${ticketNumber} in guild ${guildId}, channel ${channel.id}: ${panelConfigs[guildId]?.[channel.id]?.title}`);
           activeTickets[guildId][ticketNumber] = {
@@ -497,17 +494,14 @@ client.on('interactionCreate', async (interaction) => {
             panelTitle: panelConfigs[guildId]?.[channel.id]?.title || 'Unknown Panel'
           };
 
-          // Immediately trigger AI reply with the 4th question response if available
-          const issueQuestionId = 'q1748382343618'; // 4th question id
+          const issueQuestionId = 'q1748382343618';
           const issueDescription = responses[issueQuestionId];
           if (issueDescription && issueDescription.trim().length > 0) {
             handleAIReply(guildId, ticketNumber, issueDescription.trim());
           }
 
-          // Create form responses embed if auto display is enabled
           const embedsToSend = [];
           if (formSettings.autoDisplayFormResults) {
-            // Check if any response is non-empty
             const hasResponses = formQuestions.some(q => {
               const resp = responses[q.id];
               return resp !== undefined && resp !== null && resp !== '' && resp !== 'No response';
@@ -526,9 +520,7 @@ client.on('interactionCreate', async (interaction) => {
                       if (response === undefined || response === null || response === '') {
                         response = 'No response';
                       }
-                      // Replace backticks in response to avoid breaking code block
                       response = response.replace(/`/g, '\'');
-                      // Format response as inline code if single line, else plain text with escaped newlines
                       if (response.includes('\n')) {
                         response = response.replace(/\n/g, '\\n');
                         return `**${q.question}**\n${response}`;
@@ -560,16 +552,13 @@ client.on('interactionCreate', async (interaction) => {
             content: `Your ticket has been created: <#${channel.id}>`
           });
 
-          // Delete the ephemeral reply after 5 seconds
           setTimeout(async () => {
             try {
               await interaction.deleteReply();
             } catch (err) {
-              // Ignore errors if reply already deleted or cannot be deleted
             }
           }, 5000);
 
-          // Broadcast ticket creation update to clients
           let username = 'Unknown';
           try {
             const guild = client.guilds.cache.get(guildId);
@@ -609,7 +598,6 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // Handle button interactions
     if (interaction.isButton()) {
       if (interaction.customId.startsWith('create_ticket')) {
         const guildId = interaction.guild.id;
@@ -617,7 +605,6 @@ client.on('interactionCreate', async (interaction) => {
 
         if (!activeTickets[guildId]) activeTickets[guildId] = {};
 
-        // Check if user already has an open ticket
         for (const tNum in activeTickets[guildId]) {
           if (activeTickets[guildId][tNum].userId === userId && activeTickets[guildId][tNum].status === 'active') {
             return interaction.reply({
@@ -627,8 +614,7 @@ client.on('interactionCreate', async (interaction) => {
           }
         }
 
-        // Create modal with form questions
-        const buttonCustomId = interaction.customId; // e.g. 'create_ticket:<categoryId>'
+        const buttonCustomId = interaction.customId;
         const categoryId = buttonCustomId.split(':')[1] || '';
 
         const modal = new ModalBuilder()
@@ -713,6 +699,8 @@ client.on('interactionCreate', async (interaction) => {
           if (ticketNumber) {
             activeTickets[guildId][ticketNumber].status = 'closed';
             activeTickets[guildId][ticketNumber].lastUpdated = new Date();
+
+            activeTickets[guildId][ticketNumber].messages = [];
 
             let username = 'Unknown';
             try {
@@ -879,8 +867,8 @@ client.on('interactionCreate', async (interaction) => {
             };
             broadcastUpdate({
               type: 'TICKET_UPDATE',
-              guildId: guildId,
-              ticketNumber: ticketNumber,
+              guildId,
+              ticketNumber,
               ticket: ticketWithUsername
             });
 
@@ -994,8 +982,8 @@ client.on('interactionCreate', async (interaction) => {
 
               broadcastUpdate({
                 type: 'TICKET_UPDATE',
-                guildId: guildId,
-                ticketNumber: ticketNumber,
+                guildId,
+                ticketNumber,
                 ticket: null
               });
             } catch (error) {
@@ -1042,7 +1030,7 @@ const aiService = new AIService(process.env.OPENAI_API_KEY);
 // Listen for new messages in ticket channels and broadcast updates
 client.on('messageCreate', async (message) => {
   try {
-    if (message.author.bot) return; // Ignore bot messages
+    if (message.author.bot) return;
     const guildId = message.guild.id;
     let ticketNumber = null;
     if (activeTickets[guildId]) {
@@ -1053,14 +1041,12 @@ client.on('messageCreate', async (message) => {
         }
       }
     }
-    if (!ticketNumber) return; // Not a ticket channel
+    if (!ticketNumber) return;
 
-    // Check if ticket is in DND mode
     if (activeTickets[guildId][ticketNumber].dnd) {
       return;
     }
 
-    // Store user message
     const ticketMessage = {
       timestamp: message.createdAt.toISOString(),
       content: message.content,
@@ -1071,14 +1057,12 @@ client.on('messageCreate', async (message) => {
     }
     activeTickets[guildId][ticketNumber].messages.push(ticketMessage);
 
-    // Broadcast new ticket message to clients
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
       ticketNumber,
       message: ticketMessage
     });
 
-    // Trigger AI reply asynchronously
     handleAIReply(guildId, ticketNumber, message.content);
 
   } catch (err) {
@@ -1086,23 +1070,28 @@ client.on('messageCreate', async (message) => {
   }
 });
 
-const { PassThrough } = require('stream');
-
-// Helper function to handle AI reply generation and posting with streaming using OpenAI client library
+// Helper function to handle AI reply generation and posting with streaming
 async function handleAIReply(guildId, ticketNumber, userMessage) {
   try {
-    // Extract relevant context for the user message
     const context = await aiService.extractKnowledgeContext(userMessage);
 
-    // Construct prompt with context and user message
-    const prompt = `Based on the following context:\n${context}\n\nUser message:\n${userMessage}\n\nProvide a helpful support reply.`;
+    const previousMessages = activeTickets[guildId][ticketNumber].messages || [];
+    const messageHistory = previousMessages.slice(-5).map(msg => ({
+      role: msg.sender === 'AI Bot' ? 'assistant' : 'user',
+      content: msg.content
+    }));
 
-    // Get the streaming response (async iterable)
-    const stream = await aiService.streamResponse(prompt);
+    const systemPrompt = aiService.getSystemPrompt(userMessage);
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...messageHistory,
+      { role: 'user', content: `User message: ${userMessage}\n\nContext: ${context}\n\nProvide a helpful support reply.` }
+    ];
+
+    const stream = await aiService.streamResponse(messages);
 
     let aiReply = '';
 
-    // Iterate asynchronously over the streaming response chunks
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content;
       if (content) {
@@ -1110,7 +1099,6 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       }
     }
 
-    // After streaming completes, post the accumulated AI reply
     const channelId = activeTickets[guildId][ticketNumber].channelId;
     const channel = await client.channels.fetch(channelId);
     if (!channel) {
@@ -1121,7 +1109,6 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       content: aiReply
     });
 
-    // Update activeTickets with AI reply
     const aiMessage = {
       timestamp: new Date().toISOString(),
       content: aiReply,
@@ -1130,7 +1117,6 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
     };
     activeTickets[guildId][ticketNumber].messages.push(aiMessage);
 
-    // Broadcast AI message to clients
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
       ticketNumber,
@@ -1174,7 +1160,7 @@ app.listen(PORT, () => {
   console.log(`API server running on port ${PORT}`);
 });
 
-// Login to Discord with your client's token
+// Login to Discord
 client.login(TOKEN).catch(error => {
   console.error('Error logging in to Discord:', error);
 });
