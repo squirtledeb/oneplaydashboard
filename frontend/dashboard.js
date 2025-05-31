@@ -1,3 +1,6 @@
+import { addOrUpdateUserTicket, updateUserTickets } from './userTicketHistory.js';
+import { renderTicketLiveView } from './ticketliveview.js';
+
 // --- CONFIGURATION ---
 const API_BASE = 'http://localhost:4000';
 
@@ -19,103 +22,382 @@ let embedColor = localStorage.getItem('embedColor') || '#5865F2';
 let tickets = [];
 let ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
 let ticketActivity = [];
-let currentTicketLiveView = null; // New state: currently viewed ticket in live view
-let ticketMessages = {}; // Store messages per ticket for live view
-let formQuestions = []; // Store form questions
-let autoDisplayFormResults = false; // New state for auto display toggle
+let currentTicketLiveView = null;
+let ticketMessages = {};
+let formQuestions = [];
+let autoDisplayFormResults = false;
+let selectedLoggingChannelId = '';
+let ws = null;
+let manualDisconnect = false;
+let pollingInterval = null;
 
-function disconnectDiscord() {
-  manualDisconnect = true;
-  discordConnected = false;
-  connectedServer = '';
-  connectedGuildId = '';
-  availableChannels = [];
-  tickets = [];
-  embedTitle = 'Support Ticket System';
-  embedDescription = 'Click the button below to create a new support ticket.';
-  embedButtonLabel = 'Create Ticket';
-  embedColor = '#5865F2';
-  selectedChannelId = '';
-  localStorage.removeItem('embedTitle');
-  localStorage.removeItem('embedDescription');
-  localStorage.removeItem('embedButtonLabel');
-  localStorage.removeItem('embedColor');
-  localStorage.removeItem('selectedChannelId');
+// --- WEBSOCKET SETUP ---
+function setupWebSocket() {
   if (ws) {
     ws.close();
-    ws = null;
   }
-  stopPolling();
+  ws = new WebSocket('ws://localhost:4001');
+  ws.onopen = () => {
+    console.log('WebSocket connected');
+    ws.send(JSON.stringify({ type: 'GET_GUILD_STATUS' }));
+  };
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data.type === 'GUILD_STATUS' || data.type === 'GUILD_UPDATE') {
+        if (data.guilds && data.guilds.length > 0) {
+          discordConnected = true;
+          connectedGuildId = data.guilds[0].id;
+          connectedServer = data.guilds[0].name;
+          fetchChannelsForGuild(connectedGuildId);
+          fetchTickets(connectedGuildId);
+        } else if (!manualDisconnect) {
+          discordConnected = false;
+          connectedServer = '';
+          connectedGuildId = '';
+          availableChannels = [];
+          tickets = [];
+          renderView();
+        }
+      } else if (data.type === 'TICKET_UPDATE') {
+        handleTicketUpdate(data);
+      } else if (data.type === 'TICKET_MESSAGE') {
+        handleTicketMessage(data);
+      }
+    } catch (err) {
+      console.error('WebSocket message error:', err);
+    }
+  };
+  ws.onclose = () => {
+    console.log('WebSocket disconnected');
+    if (!manualDisconnect) {
+      setTimeout(setupWebSocket, 5000);
+    }
+  };
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error);
+  };
+}
+
+// --- TICKET HANDLING ---
+function handleTicketUpdate(data) {
+  const { guildId, ticketNumber, ticket } = data;
+  if (guildId !== connectedGuildId) return;
+  if (ticket) {
+    const existingIndex = tickets.findIndex(t => t.ticketNumber === ticketNumber);
+    if (existingIndex !== -1) {
+      tickets[existingIndex] = { ...ticket, guildId };
+    } else {
+      tickets.push({ ...ticket, guildId });
+    }
+    if (ticket.userId) {
+      addOrUpdateUserTicket(ticket.userId, {
+        guildId,
+        ticketNumber,
+        status: ticket.status,
+        createdAt: ticket.createdAt,
+        lastUpdated: ticket.lastUpdated,
+        panelTitle: ticket.panelTitle || 'Unknown Panel'
+      });
+    }
+  } else {
+    tickets = tickets.filter(t => t.ticketNumber !== ticketNumber);
+  }
+  updateTicketStats();
   renderView();
 }
+
+function handleTicketMessage(data) {
+  const { ticketNumber, message } = data;
+  if (!ticketMessages[ticketNumber]) {
+    ticketMessages[ticketNumber] = [];
+  }
+  ticketMessages[ticketNumber].push(message);
+  updateTicketStats();
+  if (currentTicketLiveView === ticketNumber) {
+    openTicketLiveView(ticketNumber, connectedGuildId);
+  }
+}
+
+function updateTicketStats() {
+  ticketDashboardStats.active = tickets.filter(t => t.status === 'active').length;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  ticketDashboardStats.resolvedToday = tickets.filter(t => 
+    t.status === 'closed' && new Date(t.lastUpdated) >= today
+  ).length;
+  ticketDashboardStats.newMessages = Object.values(ticketMessages).reduce((sum, msgs) => sum + msgs.length, 0);
+  ticketActivity = tickets.slice(-5).reverse();
+}
+
+// --- API FETCH FUNCTIONS ---
+function fetchTickets(guildId) {
+  fetch(`${API_BASE}/api/tickets/${guildId}`)
+    .then(res => res.json())
+    .then(data => {
+      tickets = data || [];
+      tickets.forEach(ticket => {
+        if (ticket.userId) {
+          addOrUpdateUserTicket(ticket.userId, {
+            guildId,
+            ticketNumber: ticket.ticketNumber,
+            status: ticket.status,
+            createdAt: ticket.createdAt,
+            lastUpdated: ticket.lastUpdated,
+            panelTitle: ticket.panelTitle || 'Unknown Panel'
+          });
+        }
+      });
+      updateTicketStats();
+      renderView();
+    })
+    .catch(err => {
+      console.error('Error fetching tickets:', err);
+      tickets = [];
+      updateTicketStats();
+      renderView();
+    });
+}
+
+function fetchChannelsForGuild(guildId) {
+  fetch(`${API_BASE}/api/channels/${guildId}`)
+    .then(res => res.json())
+    .then(data => {
+      availableChannels = data || [];
+      fetch(`${API_BASE}/api/categories/${guildId}`)
+        .then(res => res.json())
+        .then(catData => {
+          availableCategories = catData || [];
+          fetch(`${API_BASE}/api/logging-channel/${guildId}`)
+            .then(res => res.json())
+            .then(logData => {
+              selectedLoggingChannelId = logData.channelId || '';
+              renderView();
+            })
+            .catch(err => {
+              console.error('Error fetching logging channel:', err);
+              selectedLoggingChannelId = '';
+              renderView();
+            });
+        })
+        .catch(err => {
+          console.error('Error fetching categories:', err);
+          availableCategories = [];
+          renderView();
+        });
+    })
+    .catch(err => {
+      console.error('Error fetching channels:', err);
+      availableChannels = [];
+      renderView();
+    });
+}
+
+window.fetchFormQuestions = function() {
+  Promise.all([
+    fetch(`${API_BASE}/api/form-questions`).then(res => res.json()),
+    fetch(`${API_BASE}/api/auto-display-form-results`).then(res => res.json())
+  ])
+    .then(([questionsData, autoDisplayData]) => {
+      formQuestions = questionsData || [];
+      autoDisplayFormResults = autoDisplayData.enabled || false;
+      window.formQuestions = formQuestions;
+      renderView();
+    })
+    .catch(err => {
+      formQuestions = [];
+      autoDisplayFormResults = false;
+      window.formQuestions = formQuestions;
+      renderView();
+    });
+};
+
+window.toggleAutoDisplayFormResults = function(checked) {
+  autoDisplayFormResults = checked;
+  window.syncAutoDisplayFormResults();
+};
+
+window.syncAutoDisplayFormResults = function() {
+  fetch(`${API_BASE}/api/auto-display-form-results`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: autoDisplayFormResults })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        alert('Failed to save auto display setting.');
+      }
+    })
+    .catch(err => {
+      alert('Error saving auto display setting: ' + err.message);
+    });
+};
+
+// --- FORM QUESTION MANAGEMENT ---
+window.addFormQuestion = function() {
+  const input = document.getElementById('newQuestionInput');
+  if (input && input.value.trim()) {
+    formQuestions.push({
+      id: `q${Date.now()}`,
+      question: input.value.trim(),
+      placeholder: '',
+      min: 0,
+      max: 500,
+      required: false,
+      multiline: false
+    });
+    input.value = '';
+    renderView();
+  }
+};
+
+window.updateFormQuestion = function(index, field, value) {
+  if (index >= 0 && index < formQuestions.length) {
+    if (field === 'min' || field === 'max') {
+      value = parseInt(value) || 0;
+    }
+    formQuestions[index] = { ...formQuestions[index], [field]: value };
+    renderView();
+  }
+};
+
+window.removeFormQuestion = function(index) {
+  if (index >= 0 && index < formQuestions.length) {
+    formQuestions.splice(index, 1);
+    renderView();
+  }
+};
+
+window.syncFormQuestions = function() {
+  fetch(`${API_BASE}/api/form-questions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ questions: formQuestions })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert('Form questions synced successfully!');
+      } else {
+        alert('Failed to sync form questions.');
+      }
+    })
+    .catch(err => {
+      alert('Error syncing form questions: ' + err.message);
+    });
+};
 
 // --- HANDLER FUNCTIONS ---
 function toggleCollapsible() {
   isCollapsibleOpen = !isCollapsibleOpen;
   renderView();
 }
+
 function showTicketsOptions(event) {
   event.preventDefault();
   currentSidebarContent = 'tickets';
+  localStorage.setItem('currentSidebarContent', 'tickets');
   renderView();
 }
+
 function showSettingsOptions(event) {
   event.preventDefault();
   currentSidebarContent = 'settings';
+  localStorage.setItem('currentSidebarContent', 'settings');
   renderView();
 }
+
 function showTicketDashboard(event) {
   event.preventDefault();
   currentView = 'ticketDashboard';
+  localStorage.setItem('currentView', 'ticketDashboard');
   renderView();
 }
+
 function showAllTickets(event) {
   event.preventDefault();
   currentView = 'allTickets';
+  localStorage.setItem('currentView', 'allTickets');
   renderView();
 }
+
 function showOpenTickets(event) {
   event.preventDefault();
   currentView = 'openTickets';
+  localStorage.setItem('currentView', 'openTickets');
   renderView();
 }
+
 function showClosedTickets(event) {
   event.preventDefault();
   currentView = 'closedTickets';
+  localStorage.setItem('currentView', 'closedTickets');
   renderView();
 }
+
 function showIntegrations(event) {
   event.preventDefault();
   currentView = 'integrations';
+  localStorage.setItem('currentView', 'integrations');
   renderView();
 }
+
 function showBotSettings(event) {
   event.preventDefault();
   currentView = 'botSetup';
+  localStorage.setItem('currentView', 'botSetup');
   renderView();
 }
+
 function showFormSetup(event) {
   event.preventDefault();
   currentView = 'formSetup';
-  renderView();
+  localStorage.setItem('currentView', 'formSetup');
+  fetchFormQuestions();
 }
+
 function goBackToDashboard() {
   currentView = 'dashboard';
+  localStorage.setItem('currentView', 'dashboard');
   renderView();
 }
+
 function logout() {
   currentView = 'login';
   localStorage.setItem('currentView', 'login');
   renderView();
 }
+
 function onChannelSelectChange(select) {
   selectedChannelId = select.value;
   localStorage.setItem('selectedChannelId', selectedChannelId);
 }
+
 function onCategorySelectChange(select) {
   selectedCategoryId = select.value;
   localStorage.setItem('selectedCategoryId', selectedCategoryId);
 }
+
+function onLoggingChannelSelectChange(select) {
+  selectedLoggingChannelId = select.value;
+  if (!connectedGuildId) return;
+  fetch(`${API_BASE}/api/logging-channel/${connectedGuildId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ channelId: selectedLoggingChannelId })
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (!data.success) {
+        alert('Failed to save logging channel setting.');
+      }
+    })
+    .catch(err => {
+      alert('Error saving logging channel setting: ' + err.message);
+    });
+}
+
 function onEmbedInputChange() {
   embedTitle = document.getElementById('embedTitle').value;
   embedDescription = document.getElementById('embedDescription').value;
@@ -126,6 +408,7 @@ function onEmbedInputChange() {
   localStorage.setItem('embedButtonLabel', embedButtonLabel);
   localStorage.setItem('embedColor', embedColor);
 }
+
 function previewEmbed() {
   onEmbedInputChange();
   const previewContainer = document.getElementById('embedPreview');
@@ -138,18 +421,16 @@ function previewEmbed() {
   `;
   previewContainer.classList.remove('hidden');
 }
+
 function deployEmbed() {
-  // Validate
   if (!selectedChannelId) {
     showDeployMessage('Please select a channel before deploying.', false);
     return;
   }
-  // Validate category selection is optional, so no error if empty
   if (!embedTitle || !embedDescription || !embedButtonLabel || !embedColor) {
     showDeployMessage('Please fill in all embed fields.', false);
     return;
   }
-  // Prepare payload (FLATTENED, NOT NESTED)
   const payload = {
     channelId: selectedChannelId,
     title: embedTitle,
@@ -175,6 +456,7 @@ function deployEmbed() {
       showDeployMessage('Failed to deploy embed: ' + err.message, false);
     });
 }
+
 function showDeployMessage(msg, success) {
   let msgDiv = document.getElementById('deployEmbedMsg');
   if (!msgDiv) {
@@ -187,7 +469,100 @@ function showDeployMessage(msg, success) {
   setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
 }
 
+function disconnectDiscord() {
+  manualDisconnect = true;
+  discordConnected = false;
+  connectedServer = '';
+  connectedGuildId = '';
+  availableChannels = [];
+  availableCategories = [];
+  tickets = [];
+  embedTitle = 'Support Ticket System';
+  embedDescription = 'Click the button below to create a new support ticket.';
+  embedButtonLabel = 'Create Ticket';
+  embedColor = '#5865F2';
+  selectedChannelId = '';
+  selectedCategoryId = '';
+  selectedLoggingChannelId = '';
+  localStorage.removeItem('embedTitle');
+  localStorage.removeItem('embedDescription');
+  localStorage.removeItem('embedButtonLabel');
+  localStorage.removeItem('embedColor');
+  localStorage.removeItem('selectedChannelId');
+  localStorage.removeItem('selectedCategoryId');
+  if (ws) {
+    ws.close();
+    ws = null;
+  }
+  stopPolling();
+  renderView();
+}
+
+// --- TICKET LIVE VIEW ---
+window.openTicketLiveView = async function(ticketNumber, guildId) {
+  currentTicketLiveView = ticketNumber;
+  const ticket = tickets.find(t => t.ticketNumber === ticketNumber && t.guildId === guildId);
+  if (!ticket) {
+    alert('Ticket not found.');
+    return;
+  }
+  const messages = ticketMessages[ticketNumber] || [];
+  try {
+    const liveViewHtml = await renderTicketLiveView(
+      ticketNumber,
+      messages,
+      () => {
+        currentTicketLiveView = null;
+        renderView();
+      },
+      ticket.formResponses,
+      ticket.userId,
+      {
+        guildId: ticket.guildId,
+        ticketNumber: ticket.ticketNumber,
+        status: ticket.status,
+        createdAt: ticket.createdAt,
+        lastUpdated: ticket.lastUpdated,
+        panelTitle: ticket.panelTitle || 'Unknown Panel'
+      }
+    );
+    document.getElementById('mainContent').innerHTML = liveViewHtml;
+  } catch (err) {
+    console.error('Error rendering ticket live view:', err);
+    alert('Failed to load ticket details.');
+  }
+};
+
 // --- RENDERING FUNCTIONS ---
+function renderLoginView() {
+  return `
+    <div class="min-h-screen flex items-center justify-center bg-gray-100">
+      <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <h2 class="text-2xl font-bold mb-6 text-gray-800">Login</h2>
+        <div>
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
+              Username
+            </label>
+            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" id="username" type="text" placeholder="Username">
+          </div>
+          <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
+              Password
+            </label>
+            <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" id="password" type="password" placeholder="******************">
+          </div>
+          <div class="flex items-center justify-between">
+            <button onclick="goBackToDashboard()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline" type="button">
+              Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderDashboardContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to your Dashboard</h1>
@@ -219,11 +594,11 @@ function renderDashboardContent() {
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
             ${ticketActivity.map(t => `
-              <tr>
+              <tr onclick="window.openTicketLiveView('${t.ticketNumber}', '${t.guildId}')" style="cursor:pointer;">
                 <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
                 <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
+                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : 'Resolved'}</span>
                 </td>
               </tr>
             `).join('')}
@@ -233,6 +608,7 @@ function renderDashboardContent() {
     </div>
   `;
 }
+
 function renderIntegrationsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Integrations</h1>
@@ -269,12 +645,14 @@ function renderIntegrationsContent() {
     </div>
   `;
 }
+
 function renderSettingsDashboardContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Settings</h1>
     <p class="mb-4 text-gray-600">Select a quick option from the sidebar to configure integrations or bot setup.</p>
   `;
 }
+
 function renderClosedTicketsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Resolved Tickets</h1>
@@ -289,7 +667,7 @@ function renderClosedTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'closed').map(t => `
-            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
+            <tr onclick="window.openTicketLiveView('${t.ticketNumber}', '${t.guildId}')" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -302,6 +680,7 @@ function renderClosedTicketsContent() {
     </div>
   `;
 }
+
 function renderAllTicketsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">All Tickets</h1>
@@ -316,7 +695,7 @@ function renderAllTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.map(t => `
-            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
+            <tr onclick="window.openTicketLiveView('${t.ticketNumber}', '${t.guildId}')" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -329,6 +708,7 @@ function renderAllTicketsContent() {
     </div>
   `;
 }
+
 function renderOpenTicketsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Active Tickets</h1>
@@ -343,7 +723,7 @@ function renderOpenTicketsContent() {
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
           ${tickets.filter(t => t.status === 'active').map(t => `
-            <tr onclick="window.openTicketLiveView(${t.ticketNumber})" style="cursor:pointer;">
+            <tr onclick="window.openTicketLiveView('${t.ticketNumber}', '${t.guildId}')" style="cursor:pointer;">
               <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
               <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
               <td class="px-6 py-4 whitespace-nowrap">
@@ -356,6 +736,7 @@ function renderOpenTicketsContent() {
     </div>
   `;
 }
+
 function renderBotSetup() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Panel Config</h1>
@@ -432,54 +813,10 @@ function renderBotSetup() {
   `;
 }
 
-let selectedLoggingChannelId = '';
-
-function onLoggingChannelSelectChange(select) {
-  selectedLoggingChannelId = select.value;
-  // Save the logging channel setting via API
-  if (!connectedGuildId) return;
-  fetch(`${API_BASE}/api/logging-channel/${connectedGuildId}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channelId: selectedLoggingChannelId })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (!data.success) {
-      alert('Failed to save logging channel setting.');
-    }
-  })
-  .catch(err => {
-    alert('Error saving logging channel setting: ' + err.message);
-  });
-}
-
-// Fetch current logging channel setting for the guild
-function fetchLoggingChannelForGuild(guildId) {
-  fetch(`${API_BASE}/api/logging-channel/${guildId}`)
-    .then(res => res.json())
-    .then(data => {
-      selectedLoggingChannelId = data.channelId || '';
-      renderView();
-    })
-    .catch(err => {
-      selectedLoggingChannelId = '';
-      renderView();
-    });
-}
-
-// Modify fetchChannelsForGuild to also fetch logging channel setting
-const originalFetchChannelsForGuild = fetchChannelsForGuild;
-fetchChannelsForGuild = function(guildId) {
-  originalFetchChannelsForGuild(guildId);
-  fetchLoggingChannelForGuild(guildId);
-};
-
 function renderFormSetupView() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Form Setup</h1>
     <p class="mb-6 text-gray-600">Configure the form questions that users will fill when creating a support ticket.</p>
-    
     <div class="border rounded-lg p-6 mb-6">
       <h2 class="text-xl font-semibold mb-4">Current Form Questions</h2>
       ${formQuestions.length === 0 ? 
@@ -525,11 +862,11 @@ function renderFormSetupView() {
               />
               <div class="col-span-2 flex items-center space-x-2">
                 <input type="checkbox" ${q.required ? 'checked' : ''} onchange="window.updateFormQuestion(${index}, 'required', this.checked)" />
-                <label>Required</label>
+                <label class="text-sm">Required</label>
               </div>
               <div class="col-span-2 flex items-center space-x-2">
                 <input type="checkbox" ${q.multiline ? 'checked' : ''} onchange="window.updateFormQuestion(${index}, 'multiline', this.checked)" />
-                <label>Multi-line</label>
+                <label class="text-sm">Multi-line</label>
               </div>
               <div class="col-span-12 text-right">
                 <button onclick="window.removeFormQuestion(${index})" class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 transition text-sm">
@@ -540,12 +877,10 @@ function renderFormSetupView() {
           `).join('')}
         </div>`
       }
-      
       <div class="mt-4 mb-6 flex items-center space-x-2">
         <input type="checkbox" id="autoDisplayFormResultsCheckbox" ${autoDisplayFormResults ? 'checked' : ''} onchange="window.toggleAutoDisplayFormResults(this.checked)" />
         <label for="autoDisplayFormResultsCheckbox" class="text-gray-700 text-sm select-none">Auto display form results on the <span class="font-mono">Ticket Message</span> as an additional embed.</label>
       </div>
-      
       <div class="border-t pt-4">
         <h3 class="text-lg font-medium mb-3">Add New Question</h3>
         <div class="flex gap-3">
@@ -569,7 +904,6 @@ function renderFormSetupView() {
         </button>
       </div>
     </div>
-    
     <div class="mt-6 text-right">
       <button onclick="goBackToDashboard()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
         Back to Dashboard
@@ -578,626 +912,126 @@ function renderFormSetupView() {
   `;
 }
 
-window.toggleAutoDisplayFormResults = function(checked) {
-  autoDisplayFormResults = checked;
-  window.syncAutoDisplayFormResults();
-};
-
-window.syncAutoDisplayFormResults = function() {
-  fetch(`${API_BASE}/api/auto-display-form-results`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ enabled: autoDisplayFormResults })
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (!data.success) {
-      alert('Failed to save auto display setting.');
-    }
-  })
-  .catch(err => {
-    alert('Error saving auto display setting: ' + err.message);
-  });
-};
-
-window.fetchAutoDisplayFormResults = function() {
-  fetch(`${API_BASE}/api/auto-display-form-results`)
-    .then(res => res.json())
-    .then(data => {
-      autoDisplayFormResults = data.enabled || false;
-      renderView();
-    })
-    .catch(err => {
-      autoDisplayFormResults = false;
-      renderView();
-    });
-};
-
-// Modify fetchFormQuestions to also fetch auto display setting
-const originalFetchFormQuestions = window.fetchFormQuestions;
-window.fetchFormQuestions = function() {
-  Promise.all([
-    fetch(`${API_BASE}/api/form-questions`).then(res => res.json()),
-    fetch(`${API_BASE}/api/auto-display-form-results`).then(res => res.json())
-  ])
-  .then(([questionsData, autoDisplayData]) => {
-    formQuestions = questionsData || [];
-    autoDisplayFormResults = autoDisplayData.enabled || false;
-    window.formQuestions = formQuestions;
-    renderView();
-  })
-  .catch(err => {
-    formQuestions = [];
-    autoDisplayFormResults = false;
-    window.formQuestions = formQuestions;
-    renderView();
-  });
-};
-
-function formatDateTime(date) {
-  if (!date) return '';
-  const d = new Date(date);
-  return d.toLocaleString();
+function renderMainContent() {
+  if (currentTicketLiveView) {
+    return ''; // Ticket live view is handled separately
+  }
+  switch (currentView) {
+    case 'login':
+      return renderLoginView();
+    case 'dashboard':
+      return renderDashboardContent();
+    case 'ticketDashboard':
+      return renderDashboardContent();
+    case 'allTickets':
+      return renderAllTicketsContent();
+    case 'openTickets':
+      return renderOpenTicketsContent();
+    case 'closedTickets':
+      return renderClosedTicketsContent();
+    case 'integrations':
+      return renderIntegrationsContent();
+    case 'botSetup':
+      return renderBotSetup();
+    case 'formSetup':
+      return renderFormSetupView();
+    case 'settingsDashboard':
+      return renderSettingsDashboardContent();
+    default:
+      return renderDashboardContent();
+  }
 }
 
-function renderLogin() {
-  document.getElementById('app').innerHTML = `
-    <div class="flex items-center justify-center min-h-screen bg-gray-100">
-      <div class="w-full max-w-md p-8 bg-white rounded-lg shadow-md">
-        <h2 class="text-2xl font-bold mb-6 text-gray-800">Login</h2>
-        <form id="loginForm" class="space-y-4">
-          <div>
-            <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
-            <input type="text" id="username" name="username" required class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-          </div>
-          <div>
-            <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input type="password" id="password" name="password" required class="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-          </div>
-          <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded hover:bg-indigo-700 transition">Login</button>
-        </form>
+function renderSidebar() {
+  return `
+    <div class="w-64 bg-gray-800 text-white h-screen flex flex-col">
+      <div class="p-4 border-b border-gray-700">
+        <h2 class="text-xl font-bold">Dashboard</h2>
       </div>
-    </div>
-  `;
-
-  document.getElementById('loginForm').addEventListener('submit', function(event) {
-    event.preventDefault();
-    // For now, just redirect to dashboard on submit
-    currentView = 'dashboard';
-    renderView();
-  });
-}
-
-const renderDashboard = function() {
-  document.getElementById('app').innerHTML = `
-    <div class="flex h-screen">
-      <div class="bg-gray-800 text-white w-64 flex-shrink-0 h-full flex flex-col justify-between">
-        <div>
-          <div class="p-4">
-            <h2 class="text-xl font-bold mb-6">Dashboard</h2>
-            <nav>
-              <ul>
-                <li class="mb-2">
-                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showTicketsOptions(event)">
-                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z"></path>
-                    </svg>
-                    Tickets
-                  </a>
-                </li>
-                <li>
-                  <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showSettingsOptions(event)">
-                    <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    Settings
-                  </a>
-                </li>
+      <nav class="flex-1">
+        <ul>
+          <li class="border-b border-gray-700">
+            <a href="#" onclick="showTicketsOptions(event)" class="block py-2 px-4 hover:bg-gray-700 ${currentSidebarContent === 'tickets' ? 'bg-gray-700' : ''}">
+              Tickets
+            </a>
+            ${currentSidebarContent === 'tickets' && isCollapsibleOpen ? `
+              <ul class="pl-4">
+                <li><a href="#" onclick="showTicketDashboard(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'ticketDashboard' ? 'bg-gray-600' : ''}">Ticket Dashboard</a></li>
+                <li><a href="#" onclick="showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'allTickets' ? 'bg-gray-600' : ''}">All Tickets</a></li>
+                <li><a href="#" onclick="showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'openTickets' ? 'bg-gray-600' : ''}">Active Tickets</a></li>
+                <li><a href="#" onclick="showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'closedTickets' ? 'bg-gray-600' : ''}">Resolved Tickets</a></li>
               </ul>
-            </nav>
-          </div>
-        </div>
-        <div class="p-4 mb-4">
-          <button onclick="window.logout()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-            Logout
-          </button>
-        </div>
-      </div>
-      <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '64px'}">
-        <div class="p-3">
-          <button onclick="window.toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
-            </svg>
-          </button>
-          <div class="mt-4 ${isCollapsibleOpen ? 'block' : 'hidden'}">
-            <h3 class="text-lg font-semibold mb-3">Quick Options</h3>
-            <ul id="sidebarOptions">
-              ${getSidebarContent()}
-            </ul>
-          </div>
-        </div>
-      </div>
-      <div class="flex-1 p-8 overflow-auto" style="padding-bottom: 0;">
-          ${
-            currentSidebarContent === 'tickets'
-              ? (currentView === 'ticketDashboard' ? renderDashboardContent() :
-                currentView === 'allTickets' ? renderAllTicketsContent() :
-                currentView === 'openTickets' ? renderOpenTicketsContent() :
-                currentView === 'closedTickets' ? renderClosedTicketsContent() :
-                renderDashboardContent())
-              : (currentSidebarContent === 'settings'
-                ? (currentView === 'integrations' ? renderIntegrationsContent() :
-                  currentView === 'botSetup' ? renderBotSetup() :
-                  currentView === 'formSetup' ? renderFormSetupView() :
-                  renderSettingsDashboardContent())
-                : renderDashboardContent())
-          }
-        </div>
+            ` : ''}
+          </li>
+          <li class="border-b border-gray-700">
+            <a href="#" onclick="showSettingsOptions(event)" class="block py-2 px-4 hover:bg-gray-700 ${currentSidebarContent === 'settings' ? 'bg-gray-700' : ''}">
+              Settings
+            </a>
+            ${currentSidebarContent === 'settings' && isCollapsibleOpen ? `
+              <ul class="pl-4">
+                <li><a href="#" onclick="showIntegrations(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'integrations' ? 'bg-gray-600' : ''}">Integrations</a></li>
+                <li><a href="#" onclick="showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'botSetup' ? 'bg-gray-600' : ''}">Bot Setup</a></li>
+                <li><a href="#" onclick="showFormSetup(event)" class="block py-2 px-4 hover:bg-gray-600 text-sm ${currentView === 'formSetup' ? 'bg-gray-600' : ''}">Form Setup</a></li>
+              </ul>
+            ` : ''}
+          </li>
+        </ul>
+      </nav>
+      <div class="p-4 border-t border-gray-700">
+        <button onclick="logout()" class="w-full text-left py-2 px-4 hover:bg-gray-700 rounded">
+          Logout
+        </button>
       </div>
     </div>
   `;
-};
-function getSidebarContent() {
-  if (currentSidebarContent === 'tickets') {
-    return `
-      <li><a href="#" onclick="window.showTicketDashboard(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Ticket Dashboard</a></li>
-      <li><a href="#" onclick="window.showOpenTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Active Tickets</a></li>
-      <li><a href="#" onclick="window.showClosedTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Resolved Tickets</a></li>
-      <li><a href="#" onclick="window.showAllTickets(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">All Tickets</a></li>
-    `;
-  } else if (currentSidebarContent === 'settings') {
-    return `
-      <li><a href="#" onclick="window.showIntegrations(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Integrations</a></li>
-      <li><a href="#" onclick="window.showBotSettings(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Panel Config</a></li>
-      <li><a href="#" onclick="window.showFormSetup(event)" class="block py-2 px-4 hover:bg-gray-300 rounded">Form Setup</a></li>
-    `;
-  }
-  return `<li class="text-gray-700">No quick options available.</li>`;
 }
-
-function renderTicketLiveViewContent() {
-  if (!currentTicketLiveView) return '<p>No ticket selected.</p>';
-  const messages = ticketMessages[currentTicketLiveView] || [];
-  
-  // Find the ticket data to get form responses
-  let formResponses = null;
-  for (const ticket of tickets) {
-    if (ticket.ticketNumber.toString().padStart(4, '0') === currentTicketLiveView) {
-      formResponses = ticket.formResponses;
-      break;
-    }
-  }
-  
-  console.log('Rendering live ticket view for ticket:', currentTicketLiveView, 'with messages:', messages, 'and form responses:', formResponses);
-  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()', formResponses);
-}
-
-// Fetch ticket messages for live view
-function fetchTicketMessages(ticketNumber) {
-  fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch ticket messages');
-      return res.json();
-    })
-    .then(data => {
-      ticketMessages[ticketNumber] = data || [];
-      renderView();
-    })
-    .catch(err => {
-      ticketMessages[ticketNumber] = [];
-      renderView();
-    });
-}
-
-// Open live ticket view and fetch messages
-window.openTicketLiveView = function(ticketNumber) {
-  currentTicketLiveView = ticketNumber.toString().padStart(4, '0');
-  fetchTicketMessages(currentTicketLiveView);
-  currentView = 'ticketLiveView';
-  renderView();
-};
-
-// Close live ticket view
-window.closeTicketLiveView = function() {
-  currentTicketLiveView = null;
-  currentView = 'dashboard';
-  renderView();
-};
 
 function renderView() {
-  localStorage.setItem('currentView', currentView);
-  localStorage.setItem('currentSidebarContent', currentSidebarContent);
-  if (currentView === 'login') {
-    renderLogin();
-  } else if (currentView === 'ticketLiveView') {
-    document.getElementById('app').innerHTML = `
-      <div class="flex h-screen">
-        <div class="bg-gray-800 text-white w-64 flex-shrink-0 h-full flex flex-col justify-between">
-          <div>
-            <div class="p-4">
-              <h2 class="text-xl font-bold mb-6">Dashboard</h2>
-              <nav>
-                <ul>
-                  <li class="mb-2">
-                    <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showTicketsOptions(event)">
-                      <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
-                      </svg>
-                      Tickets
-                    </a>
-                  </li>
-                  <li>
-                    <a href="#" class="flex items-center px-4 py-3 rounded hover:bg-gray-700 transition duration-200" onclick="window.showSettingsOptions(event)">
-                      <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                      </svg>
-                      Settings
-                    </a>
-                  </li>
-                </ul>
-              </nav>
-            </div>
-          </div>
-          <div class="p-4 mb-4">
-            <button onclick="window.logout()" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
-              Logout
-            </button>
-          </div>
-        </div>
-        <div id="collapsibleSidebar" class="bg-gray-200 sidebar-transition flex-shrink-0" style="width: ${isCollapsibleOpen ? '250px' : '64px'}">
-          <div class="p-3">
-            <button onclick="window.toggleCollapsible()" class="w-full flex justify-center items-center p-2 rounded hover:bg-gray-300 transition duration-200">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${isCollapsibleOpen ? 'M15 19l-7-7 7-7' : 'M9 5l7 7-7 7'}"></path>
-              </svg>
-            </button>
-            <div class="mt-4 ${isCollapsibleOpen ? 'block' : 'hidden'}">
-              <h3 class="text-lg font-semibold mb-3">Quick Options</h3>
-              <ul id="sidebarOptions">
-                ${getSidebarContent()}
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div class="flex-1 p-8 overflow-auto" style="padding-bottom: 0;">
-          <div class="bg-white rounded-lg shadow-md p-6">
-            ${renderTicketLiveViewContent()}
-          </div>
-        </div>
-      </div>
-    </div>
-    `;
-  } else {
-    renderDashboard();
+  if (currentTicketLiveView) {
+    return; // Ticket live view is already rendered
   }
-}
-
-// --- WEBSOCKET & API ---
-let ws;
-let wsRetryCount = 0;
-const MAX_RETRY_COUNT = 3;
-
-function setupWebSocket() {
-  if (ws) ws.close();
-  ws = new window.WebSocket('ws://localhost:4001');
-  ws.onopen = () => {
-    wsRetryCount = 0;
-    ws.send(JSON.stringify({ type: 'GET_GUILD_STATUS' }));
-  };
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      console.log('WebSocket message received:', data);
-      if (data.type === 'GUILD_UPDATE' || data.type === 'GUILD_STATUS') {
-        if (data.guilds && data.guilds.length > 0) {
-          discordConnected = true;
-          connectedServer = data.guilds[0].name;
-          connectedGuildId = data.guilds[0].id;
-          fetchChannelsForGuild(connectedGuildId);
-          fetchCategoriesForGuild(connectedGuildId);
-          fetchTicketsForGuild(connectedGuildId);
-        } else {
-          discordConnected = false;
-          connectedServer = '';
-          connectedGuildId = '';
-          availableChannels = [];
-          tickets = [];
-          if (currentView !== 'botSetup') {
-            renderView();
-          }
-        }
-      } else if (data.type === 'TICKET_MESSAGE') {
-        // New WebSocket message for live ticket update
-        let ticketNumber = data.ticketNumber;
-        // Normalize ticketNumber to string with leading zeros length 4
-        ticketNumber = ticketNumber.toString().padStart(4, '0');
-        const message = data.message;
-        if (!ticketMessages[ticketNumber]) {
-          ticketMessages[ticketNumber] = [];
-        }
-        ticketMessages[ticketNumber].push(message);
-        // If currently viewing this ticket live, re-render
-        if (currentTicketLiveView === ticketNumber) {
-          renderView();
-        }
-      } else if (data.type === 'TICKET_UPDATE') {
-        // Update or add ticket in tickets array
-        const updatedTicket = data.ticket;
-        const index = tickets.findIndex(t => t.ticketNumber === updatedTicket.ticketNumber);
-        if (index !== -1) {
-          tickets[index] = updatedTicket;
-        } else {
-          tickets.push(updatedTicket);
-        }
-        updateTicketDashboardStats();
-        renderView();
-      }
-    } catch (e) {
-      console.error('WebSocket parse error:', e);
-    }
-  };
-  ws.onclose = () => {
-    if (wsRetryCount < MAX_RETRY_COUNT) {
-      wsRetryCount++;
-      setTimeout(setupWebSocket, 2000);
-    }
-  };
-  ws.onerror = (error) => {
-    console.error('WebSocket Error:', error);
-  };
-}
-function fetchChannelsForGuild(guildId) {
-  fetch(`${API_BASE}/api/channels/${guildId}`)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch channels');
-      return res.json();
-    })
-    .then(channels => {
-      availableChannels = channels || [];
-      if (!availableChannels.find(c => c.id === selectedChannelId)) {
-        selectedChannelId = '';
-        localStorage.removeItem('selectedChannelId');
-      }
-      renderView();
-    })
-    .catch(err => {
-      availableChannels = [];
-      renderView();
-    });
-}
-
-function fetchCategoriesForGuild(guildId) {
-  fetch(`${API_BASE}/api/categories/${guildId}`)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch categories');
-      return res.json();
-    })
-    .then(categories => {
-      availableCategories = categories || [];
-      if (!availableCategories.find(c => c.id === selectedCategoryId)) {
-        selectedCategoryId = '';
-        localStorage.removeItem('selectedCategoryId');
-      }
-      renderView();
-    })
-    .catch(err => {
-      availableCategories = [];
-      renderView();
-    });
-}
-function fetchTicketsForGuild(guildId) {
-  fetch(`${API_BASE}/api/tickets/${guildId}`)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch tickets');
-      return res.json();
-    })
-    .then(data => {
-      tickets = data || [];
-      updateTicketDashboardStats();
-      renderView();
-    })
-    .catch(err => {
-      tickets = [];
-      ticketDashboardStats = { active: 0, resolvedToday: 0, newMessages: 0 };
-      ticketActivity = [];
-      renderView();
-    });
-}
-function updateTicketDashboardStats() {
-  const now = new Date();
-  let active = 0, resolvedToday = 0, newMessages = 0;
-  let activity = [];
-  tickets.forEach(ticket => {
-    if (ticket.status === 'active') active++;
-    if (ticket.status === 'closed') {
-      const last = new Date(ticket.lastUpdated);
-      if (last.toDateString() === now.toDateString()) resolvedToday++;
-    }
-    activity.push({
-      ticketNumber: ticket.ticketNumber,
-      status: ticket.status,
-      lastUpdated: ticket.lastUpdated,
-      userId: ticket.userId,
-      username: ticket.username || 'Unknown'
-    });
-  });
-  ticketDashboardStats = { active, resolvedToday, newMessages: 0 };
-  ticketActivity = activity.sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated)).slice(0, 10);
-}
-function pollGuildStatus() {
-  setInterval(() => {
-    fetch(`${API_BASE}/api/guilds`)
-      .then(res => {
-        if (!res.ok) throw new Error('Network response was not ok');
-        return res.json();
-      })
-      .then(guilds => {
-        if (guilds && guilds.length > 0) {
-          discordConnected = true;
-          connectedServer = guilds[0].name;
-          connectedGuildId = guilds[0].id;
-          fetchChannelsForGuild(connectedGuildId);
-          fetchCategoriesForGuild(connectedGuildId);
-          fetchTicketsForGuild(connectedGuildId);
-        } else {
-          discordConnected = false;
-          connectedServer = '';
-          connectedGuildId = '';
-          availableChannels = [];
-          availableCategories = [];
-          tickets = [];
-          if (currentView !== 'botSetup') {
-            renderView();
-          }
-        }
-      })
-      .catch(error => {
-        console.error('Error polling guild status:', error);
-      });
-  }, 5000);
-}
-
-// --- INIT ---
-document.addEventListener('DOMContentLoaded', () => {
-  // Restore state from localStorage
-  currentView = localStorage.getItem('currentView') || 'login';
-  currentSidebarContent = localStorage.getItem('currentSidebarContent') || 'tickets';
-  selectedCategoryId = localStorage.getItem('selectedCategoryId') || '';
-  selectedChannelId = localStorage.getItem('selectedChannelId') || '';
-  embedTitle = localStorage.getItem('embedTitle') || 'Support Ticket System';
-  embedDescription = localStorage.getItem('embedDescription') || 'Click the button below to create a new support ticket.';
-  embedButtonLabel = localStorage.getItem('embedButtonLabel') || 'Create Ticket';
-  embedColor = localStorage.getItem('embedColor') || '#5865F2';
-
-  renderView();
-  setupWebSocket();
-  fetchFormQuestions();
-
-  // Fetch initial data for the connected guild if any
-  if (connectedGuildId) {
-    fetchChannelsForGuild(connectedGuildId);
-    fetchCategoriesForGuild(connectedGuildId);
-    fetchTicketsForGuild(connectedGuildId);
-  }
-  // Removed pollGuildStatus to prevent periodic refresh causing scroll reset
-  // pollGuildStatus();
-});
-
-// --- EXPOSE FUNCTIONS TO WINDOW FOR INLINE HANDLERS ---
-window.toggleCollapsible = toggleCollapsible;
-window.showTicketsOptions = showTicketsOptions;
-window.showSettingsOptions = showSettingsOptions;
-window.showTicketDashboard = showTicketDashboard;
-window.showAllTickets = showAllTickets;
-window.showOpenTickets = showOpenTickets;
-window.showClosedTickets = showClosedTickets;
-window.showIntegrations = showIntegrations;
-window.showBotSettings = showBotSettings;
-window.showFormSetup = showFormSetup;
-window.logout = logout;
-window.onChannelSelectChange = onChannelSelectChange;
-window.onEmbedInputChange = onEmbedInputChange;
-window.previewEmbed = previewEmbed;
-window.goBackToDashboard = goBackToDashboard;
-window.deployEmbed = deployEmbed;
-
-// Form questions management functions
-function addFormQuestion() {
-  const questionInput = document.getElementById('newQuestionInput');
-  const question = questionInput.value.trim();
-  if (!question) {
-    alert('Please enter a question');
+  const app = document.getElementById('app');
+  if (!app) {
+    console.error('App container not found');
     return;
   }
-  
-  const newQuestion = {
-    id: 'q' + Date.now(),
-    question: question,
-    placeholder: '',
-    min: 0,
-    max: 500,
-    required: false,
-    multiline: false
-  };
-  
-  formQuestions.push(newQuestion);
-  window.formQuestions = formQuestions;
-  questionInput.value = '';
-  saveFormQuestions();
-  renderView();
+  app.innerHTML = `
+    <div class="flex h-screen">
+      ${renderSidebar()}
+      <div class="flex-1 p-6 overflow-auto" id="mainContent">
+        ${renderMainContent()}
+      </div>
+    </div>
+  `;
 }
 
-function removeFormQuestion(index) {
-  formQuestions.splice(index, 1);
-  window.formQuestions = formQuestions;
-  saveFormQuestions();
-  renderView();
+// --- POLLING ---
+function startPolling() {
+  if (pollingInterval) return;
+  pollingInterval = setInterval(() => {
+    if (connectedGuildId) {
+      fetchTickets(connectedGuildId);
+    }
+  }, 60000);
 }
 
-function saveFormQuestions() {
-  fetch(`${API_BASE}/api/form-questions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ questions: formQuestions })
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (!data.success) {
-        console.error('Failed to save form questions:', data.error);
-      }
-    })
-    .catch(err => {
-      console.error('Error saving form questions:', err);
-    });
-}
-
-function fetchFormQuestions() {
-  fetch(`${API_BASE}/api/form-questions`)
-    .then(res => res.json())
-    .then(data => {
-      formQuestions = data || [];
-      window.formQuestions = formQuestions;
-      renderView();
-    })
-    .catch(err => {
-      console.error('Error fetching form questions:', err);
-      formQuestions = [];
-      window.formQuestions = formQuestions;
-    });
-}
-
-function updateFormQuestion(index, field, value) {
-  console.log(`updateFormQuestion called with index=${index}, field=${field}, value=`, value);
-  if (index < 0 || index >= formQuestions.length) return;
-  const question = formQuestions[index];
-  if (!question) return;
-
-  if (field === 'min' || field === 'max') {
-    const num = parseInt(value, 10);
-    question[field] = isNaN(num) ? 0 : num;
-  } else if (field === 'required' || field === 'multiline') {
-    question[field] = !!value;
-  } else {
-    question[field] = value;
+function stopPolling() {
+  if (pollingInterval) {
+    clearInterval(pollingInterval);
+    pollingInterval = null;
   }
+}
 
-  formQuestions[index] = question;
-  window.formQuestions = formQuestions;
-  // Removed automatic saveFormQuestions call here to avoid redundant saves
+// --- INITIALIZATION ---
+document.addEventListener('DOMContentLoaded', () => {
+  setupWebSocket();
+  startPolling();
+  if (currentView !== 'login') {
+    if (connectedGuildId) {
+      fetchChannelsForGuild(connectedGuildId);
+      fetchTickets(connectedGuildId);
+    }
+    fetchFormQuestions();
+  }
   renderView();
-}
-
-function syncFormQuestions() {
-  saveFormQuestions();
-  alert('Form questions synced to the bot successfully.');
-}
-
-window.syncFormQuestions = syncFormQuestions;
-
-// Add to window object for inline handlers
-window.addFormQuestion = addFormQuestion;
-window.removeFormQuestion = removeFormQuestion;
-window.updateFormQuestion = updateFormQuestion;
-window.formQuestions = formQuestions;
+});

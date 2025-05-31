@@ -21,6 +21,28 @@ try {
   formQuestions = [];
 }
 
+// Load tickets from file
+const ticketsPath = path.join(__dirname, 'tickets.json');
+let allTickets = {};
+
+try {
+  if (fs.existsSync(ticketsPath)) {
+    allTickets = JSON.parse(fs.readFileSync(ticketsPath, 'utf8'));
+  }
+} catch (error) {
+  console.error('Error loading tickets:', error);
+  allTickets = {};
+}
+
+// Function to save tickets to file
+function saveTickets() {
+  try {
+    fs.writeFileSync(ticketsPath, JSON.stringify(allTickets, null, 2));
+  } catch (error) {
+    console.error('Error saving tickets:', error);
+  }
+}
+
 // Initialize Express server
 const app = express();
 app.use(cors());
@@ -236,6 +258,29 @@ app.get('/api/ticket-messages/:ticketNumber', (req, res) => {
   res.json(messages);
 });
 
+app.get('/api/user-tickets/:userId', (req, res) => {
+  const { userId } = req.params;
+  const userTickets = [];
+
+  for (const guildId in allTickets) {
+    for (const ticketNumber in allTickets[guildId]) {
+      const ticket = allTickets[guildId][ticketNumber];
+      if (ticket.userId === userId && ticket.status !== 'deleted') {
+        userTickets.push({
+          guildId,
+          ticketNumber: ticketNumber.toString().padStart(4, '0'),
+          status: ticket.status,
+          createdAt: ticket.createdAt,
+          lastUpdated: ticket.lastUpdated,
+          panelTitle: ticket.panelTitle || 'Unknown Panel'
+        });
+      }
+    }
+  }
+
+  res.json(userTickets);
+});
+
 app.post('/api/deploy-embed', async (req, res) => {
   try {
     const { channelId, title, description, buttonLabel, color, parentCategoryId } = req.body;
@@ -394,6 +439,9 @@ client.on('interactionCreate', async (interaction) => {
           activeTickets[guildId][ticketNumber].dnd = true;
           activeTickets[guildId][ticketNumber].lastUpdated = new Date();
 
+          allTickets[guildId][ticketNumber] = { ...activeTickets[guildId][ticketNumber] };
+          saveTickets();
+
           let username = 'Unknown';
           try {
             const guild = client.guilds.cache.get(guildId);
@@ -480,8 +528,9 @@ client.on('interactionCreate', async (interaction) => {
           const channel = await interaction.guild.channels.create(channelOptions);
           
           if (!activeTickets[guildId]) activeTickets[guildId] = {};
-          console.log(`Assigning panelTitle for ticket ${ticketNumber} in guild ${guildId}, channel ${channel.id}: ${panelConfigs[guildId]?.[channel.id]?.title}`);
-          activeTickets[guildId][ticketNumber] = {
+          if (!allTickets[guildId]) allTickets[guildId] = {};
+          
+          const ticketData = {
             ticketNumber,
             userId,
             channelId: channel.id,
@@ -493,6 +542,10 @@ client.on('interactionCreate', async (interaction) => {
             messages: [],
             panelTitle: panelConfigs[guildId]?.[channel.id]?.title || 'Unknown Panel'
           };
+
+          activeTickets[guildId][ticketNumber] = ticketData;
+          allTickets[guildId][ticketNumber] = { ...ticketData };
+          saveTickets();
 
           const issueQuestionId = 'q1748382343618';
           const issueDescription = responses[issueQuestionId];
@@ -699,34 +752,10 @@ client.on('interactionCreate', async (interaction) => {
           if (ticketNumber) {
             activeTickets[guildId][ticketNumber].status = 'closed';
             activeTickets[guildId][ticketNumber].lastUpdated = new Date();
-
             activeTickets[guildId][ticketNumber].messages = [];
 
-            let username = 'Unknown';
-            try {
-              const guild = client.guilds.cache.get(guildId);
-              if (guild) {
-                let member = guild.members.cache.get(activeTickets[guildId][ticketNumber].userId);
-                if (!member) {
-                  member = await guild.members.fetch(activeTickets[guildId][ticketNumber].userId);
-                }
-                if (member) {
-                  username = member.user.tag || member.user.username;
-                }
-              }
-            } catch (e) {
-              username = 'Unknown';
-            }
-            const ticketWithUsername = {
-              ...activeTickets[guildId][ticketNumber],
-              username
-            };
-            broadcastUpdate({
-              type: 'TICKET_UPDATE',
-              guildId: guildId,
-              ticketNumber: ticketNumber,
-              ticket: ticketWithUsername
-            });
+            allTickets[guildId][ticketNumber] = { ...activeTickets[guildId][ticketNumber] };
+            saveTickets();
 
             try {
               const loggingChannelId = loggingChannelSettings[guildId];
@@ -778,6 +807,32 @@ client.on('interactionCreate', async (interaction) => {
             } catch (err) {
               console.error('Error sending ticket closed controls:', err);
             }
+
+            let username = 'Unknown';
+            try {
+              const guild = client.guilds.cache.get(guildId);
+              if (guild) {
+                let member = guild.members.cache.get(activeTickets[guildId][ticketNumber].userId);
+                if (!member) {
+                  member = await guild.members.fetch(activeTickets[guildId][ticketNumber].userId);
+                }
+                if (member) {
+                  username = member.user.tag || member.user.username;
+                }
+              }
+            } catch (e) {
+              username = 'Unknown';
+            }
+            const ticketWithUsername = {
+              ...activeTickets[guildId][ticketNumber],
+              username
+            };
+            broadcastUpdate({
+              type: 'TICKET_UPDATE',
+              guildId: guildId,
+              ticketNumber: ticketNumber,
+              ticket: ticketWithUsername
+            });
 
             await interaction.update({
               content: 'This ticket has been closed.',
@@ -845,6 +900,9 @@ client.on('interactionCreate', async (interaction) => {
           if (ticketNumber) {
             activeTickets[guildId][ticketNumber].status = 'active';
             activeTickets[guildId][ticketNumber].lastUpdated = new Date();
+
+            allTickets[guildId][ticketNumber] = { ...activeTickets[guildId][ticketNumber] };
+            saveTickets();
 
             let username = 'Unknown';
             try {
@@ -960,6 +1018,10 @@ client.on('interactionCreate', async (interaction) => {
               if (activeTickets[guildId]) {
                 delete activeTickets[guildId][ticketNumber];
               }
+              if (allTickets[guildId]) {
+                allTickets[guildId][ticketNumber].status = 'deleted';
+                saveTickets();
+              }
 
               try {
                 const loggingChannelId = loggingChannelSettings[guildId];
@@ -1057,6 +1119,9 @@ client.on('messageCreate', async (message) => {
     }
     activeTickets[guildId][ticketNumber].messages.push(ticketMessage);
 
+    allTickets[guildId][ticketNumber] = { ...activeTickets[guildId][ticketNumber] };
+    saveTickets();
+
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
       ticketNumber,
@@ -1076,19 +1141,16 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
     const context = await aiService.extractKnowledgeContext(userMessage);
 
     const previousMessages = activeTickets[guildId][ticketNumber].messages || [];
-    const messageHistory = previousMessages.slice(-5).map(msg => ({
-      role: msg.sender === 'AI Bot' ? 'assistant' : 'user',
-      content: msg.content
-    }));
+    const messageHistoryText = previousMessages.slice(-5).map(msg => {
+      const sender = msg.sender === 'AI Bot' ? 'Assistant' : 'User';
+      return `${sender}: ${msg.content}`;
+    }).join('\n');
 
     const systemPrompt = aiService.getSystemPrompt(userMessage);
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...messageHistory,
-      { role: 'user', content: `User message: ${userMessage}\n\nContext: ${context}\n\nProvide a helpful support reply.` }
-    ];
 
-    const stream = await aiService.streamResponse(messages);
+    const prompt = `${systemPrompt}\n\nConversation history:\n${messageHistoryText}\n\nUser message: ${userMessage}\n\nProvide a helpful support reply.`;
+
+    const stream = await aiService.streamResponse(prompt);
 
     let aiReply = '';
 
@@ -1105,6 +1167,10 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       console.error(`Channel not found for ticket ${ticketNumber} in guild ${guildId}`);
       return;
     }
+    if (!aiReply || aiReply.trim().length === 0) {
+      console.warn('AI reply is empty, skipping sending message.');
+      return;
+    }
     const sentMessage = await channel.send({
       content: aiReply
     });
@@ -1116,6 +1182,9 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       messageId: sentMessage.id
     };
     activeTickets[guildId][ticketNumber].messages.push(aiMessage);
+
+    allTickets[guildId][ticketNumber] = { ...activeTickets[guildId][ticketNumber] };
+    saveTickets();
 
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
