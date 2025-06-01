@@ -9,7 +9,7 @@ function renderTicketLiveView(ticketNumber, messages, closeCallback, formRespons
         <button onclick="${closeCallback}" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">Back to Tickets</button>
       </div>
       <div class="flex space-x-6">
-        <div id="liveMessages" class="flex-1 border rounded p-4 h-96 overflow-auto bg-white">
+          <div id="liveMessages" class="flex-1 border rounded p-4 overflow-auto bg-white" style="min-height: calc(100vh - 150px);">
           ${messages.length === 0 ? '<p>No messages yet.</p>' : messages.map(msg => `
             <div class="mb-2 p-2 border-b border-gray-200">
               <div class="text-xs font-semibold text-indigo-600">${msg.sender || 'Unknown'}</div>
