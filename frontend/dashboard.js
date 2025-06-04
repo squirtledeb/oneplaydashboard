@@ -776,6 +776,7 @@ function renderTicketLiveViewContent() {
 
 // Fetch ticket messages for live view
 function fetchTicketMessages(ticketNumber) {
+  console.log(`Fetching messages for ticket ${ticketNumber}`);
   fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`)
     .then(res => {
       if (!res.ok) throw new Error('Failed to fetch ticket messages');
@@ -917,9 +918,14 @@ function setupWebSocket() {
         if (!ticketMessages[ticketNumber]) {
           ticketMessages[ticketNumber] = [];
         }
-        ticketMessages[ticketNumber].push(message);
+        // Check if message already exists to avoid duplicates
+        if (!ticketMessages[ticketNumber].some(msg => msg.timestamp === message.timestamp && msg.content === message.content && msg.sender === message.sender)) {
+          ticketMessages[ticketNumber].push(message);
+        }
+        console.log(`Added message to ticket ${ticketNumber}:`, message);
         // If currently viewing this ticket live, re-render
         if (currentTicketLiveView === ticketNumber) {
+          console.log(`Currently viewing ticket ${ticketNumber}, rendering view.`);
           renderView();
         }
       } else if (data.type === 'TICKET_UPDATE') {

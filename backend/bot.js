@@ -1059,7 +1059,7 @@ client.on('messageCreate', async (message) => {
 
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
-      ticketNumber,
+      ticketNumber: ticketNumber.toString().padStart(4, '0'),
       message: ticketMessage
     });
 
@@ -1119,7 +1119,7 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
 
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
-      ticketNumber,
+      ticketNumber: ticketNumber.toString().padStart(4, '0'),
       message: aiMessage
     });
 
