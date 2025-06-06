@@ -24,6 +24,23 @@ let ticketMessages = {}; // Store messages per ticket for live view
 let formQuestions = []; // Store form questions
 let autoDisplayFormResults = false; // New state for auto display toggle
 
+// Fix: Fetch auto display form results on page load to set checkbox state correctly
+window.fetchAutoDisplayFormResults = function() {
+  fetch(`${API_BASE}/api/auto-display-form-results`)
+    .then(res => res.json())
+    .then(data => {
+      autoDisplayFormResults = data.enabled || false;
+      renderView();
+    })
+    .catch(err => {
+      autoDisplayFormResults = false;
+      renderView();
+    });
+};
+
+// Call fetchAutoDisplayFormResults on initial load to sync checkbox state
+window.fetchAutoDisplayFormResults();
+
 function disconnectDiscord() {
   manualDisconnect = true;
   discordConnected = false;

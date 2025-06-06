@@ -7,41 +7,66 @@ const path = require('path');
 const { PassThrough } = require('stream');
 require('dotenv').config();
 
+const mongoose = require('mongoose');
+const { FormQuestion, FormSettings, LoggingChannelSetting } = require('./models');
+
 // Debug environment variables
 console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
 console.log('DISCORD_BOT_TOKEN:', process.env.DISCORD_BOT_TOKEN ? 'Set' : 'Not set');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 
-// Load form questions
-let formQuestions = [];
-try {
-  const formQuestionsPath = path.join(__dirname, 'formQuestions.json');
-  formQuestions = JSON.parse(fs.readFileSync(formQuestionsPath, 'utf8')).questions;
-} catch (error) {
-  console.error('Error loading form questions:', error);
-  formQuestions = [];
-}
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('Connected to MongoDB');
+}).catch(err => {
+  console.error('MongoDB connection error:', err);
+});
 
 // Initialize Express server
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// Cache formQuestions in memory for bot usage
+let formQuestions = [];
+
+// Load form questions from DB on startup
+async function loadFormQuestions() {
+  try {
+    formQuestions = await FormQuestion.find().lean();
+    console.log('Loaded form questions from DB:', formQuestions.length);
+  } catch (error) {
+    console.error('Error loading form questions from DB:', error);
+    formQuestions = [];
+  }
+}
+loadFormQuestions();
+
 // Form questions endpoints
-app.get('/api/form-questions', (req, res) => {
-  res.json(formQuestions);
+app.get('/api/form-questions', async (req, res) => {
+  try {
+    const questions = await FormQuestion.find().lean();
+    res.json(questions);
+  } catch (error) {
+    console.error('Error fetching form questions:', error);
+    res.status(500).json([]);
+  }
 });
 
-app.post('/api/form-questions', (req, res) => {
+app.post('/api/form-questions', async (req, res) => {
   const { questions } = req.body;
   if (!Array.isArray(questions)) {
     return res.status(400).json({ error: 'Invalid questions format' });
   }
-  
-  formQuestions = questions;
-  const formQuestionsPath = path.join(__dirname, 'formQuestions.json');
-  
   try {
-    fs.writeFileSync(formQuestionsPath, JSON.stringify({ questions }, null, 2));
+    // Remove all existing questions and insert new ones
+    await FormQuestion.deleteMany({});
+    await FormQuestion.insertMany(questions);
+    // Update cached formQuestions
+    formQuestions = questions;
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving form questions:', error);
@@ -50,47 +75,33 @@ app.post('/api/form-questions', (req, res) => {
 });
 
 // Form settings file path and default
-const formSettingsPath = path.join(__dirname, 'formSettings.json');
-let formSettings = { autoDisplayFormResults: false };
-
-// Logging channel settings file path and default
-const loggingChannelSettingsPath = path.join(__dirname, 'loggingChannelSettings.json');
-let loggingChannelSettings = {};
-
-// Load form settings on startup
-try {
-  if (fs.existsSync(formSettingsPath)) {
-    formSettings = JSON.parse(fs.readFileSync(formSettingsPath, 'utf8'));
-  }
-} catch (error) {
-  console.error('Error loading form settings:', error);
-  formSettings = { autoDisplayFormResults: false };
-}
-
-// Load logging channel settings on startup
-try {
-  if (fs.existsSync(loggingChannelSettingsPath)) {
-    loggingChannelSettings = JSON.parse(fs.readFileSync(loggingChannelSettingsPath, 'utf8'));
-  }
-} catch (error) {
-  console.error('Error loading logging channel settings:', error);
-  loggingChannelSettings = {};
-}
+// Removed local JSON loading, replaced with MongoDB queries below
 
 // API to get auto display form results setting
-app.get('/api/auto-display-form-results', (req, res) => {
-  res.json({ enabled: formSettings.autoDisplayFormResults || false });
+app.get('/api/auto-display-form-results', async (req, res) => {
+  try {
+    const settings = await FormSettings.findOne().lean();
+    res.json({ enabled: settings ? settings.autoDisplayFormResults : false });
+  } catch (error) {
+    console.error('Error fetching form settings:', error);
+    res.status(500).json({ enabled: false });
+  }
 });
 
 // API to set auto display form results setting
-app.post('/api/auto-display-form-results', (req, res) => {
+app.post('/api/auto-display-form-results', async (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') {
     return res.status(400).json({ error: 'Invalid value for enabled' });
   }
-  formSettings.autoDisplayFormResults = enabled;
   try {
-    fs.writeFileSync(formSettingsPath, JSON.stringify(formSettings, null, 2));
+    let settings = await FormSettings.findOne();
+    if (!settings) {
+      settings = new FormSettings({ autoDisplayFormResults: enabled });
+    } else {
+      settings.autoDisplayFormResults = enabled;
+    }
+    await settings.save();
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving form settings:', error);
@@ -99,25 +110,35 @@ app.post('/api/auto-display-form-results', (req, res) => {
 });
 
 // API to get logging channel for a guild
-app.get('/api/logging-channel/:guildId', (req, res) => {
+app.get('/api/logging-channel/:guildId', async (req, res) => {
   const { guildId } = req.params;
-  const channelId = loggingChannelSettings[guildId] || '';
-  res.json({ channelId });
+  try {
+    const setting = await LoggingChannelSetting.findOne({ guildId });
+    res.json({ channelId: setting ? setting.channelId : '' });
+  } catch (error) {
+    console.error('Error fetching logging channel setting:', error);
+    res.status(500).json({ channelId: '' });
+  }
 });
 
 // API to set logging channel for a guild
-app.post('/api/logging-channel/:guildId', (req, res) => {
+app.post('/api/logging-channel/:guildId', async (req, res) => {
   const { guildId } = req.params;
   const { channelId } = req.body;
   if (typeof channelId !== 'string') {
     return res.status(400).json({ error: 'Invalid channelId' });
   }
-  loggingChannelSettings[guildId] = channelId;
   try {
-    fs.writeFileSync(loggingChannelSettingsPath, JSON.stringify(loggingChannelSettings, null, 2));
+    let setting = await LoggingChannelSetting.findOne({ guildId });
+    if (!setting) {
+      setting = new LoggingChannelSetting({ guildId, channelId });
+    } else {
+      setting.channelId = channelId;
+    }
+    await setting.save();
     res.json({ success: true });
   } catch (error) {
-    console.error('Error saving logging channel settings:', error);
+    console.error('Error saving logging channel setting:', error);
     res.status(500).json({ error: 'Failed to save logging channel setting' });
   }
 });
@@ -343,6 +364,24 @@ function broadcastUpdate(data) {
   });
 }
 
+// Cache formSettings in memory for bot usage
+let formSettings = { autoDisplayFormResults: false };
+
+// Load form settings from DB on startup
+async function loadFormSettings() {
+  try {
+    const settings = await FormSettings.findOne().lean();
+    if (settings) {
+      formSettings = settings;
+    }
+    console.log('Loaded form settings from DB:', formSettings);
+  } catch (error) {
+    console.error('Error loading form settings from DB:', error);
+    formSettings = { autoDisplayFormResults: false };
+  }
+}
+loadFormSettings();
+
 // Bot startup
 client.once('ready', () => {
   console.log('Discord bot is ready!');
@@ -502,37 +541,37 @@ client.on('interactionCreate', async (interaction) => {
 
           const embedsToSend = [];
           if (formSettings.autoDisplayFormResults) {
-            const hasResponses = formQuestions.some(q => {
-              const resp = responses[q.id];
-              return resp !== undefined && resp !== null && resp !== '' && resp !== 'No response';
-            });
-            const descriptionText = hasResponses ? 'Form Responses:' : '';
-            const formEmbed = new EmbedBuilder()
-              .setTitle('Ticket Information')
-              .setColor('#5865F2')
-              .addFields([
-                {
-                  name: '\u200B',
-                  value: (() => {
-                    if (formQuestions.length === 0) return '';
-                    return formQuestions.map(q => {
-                      let response = responses[q.id];
-                      if (response === undefined || response === null || response === '') {
-                        response = 'No response';
-                      }
-                      response = response.replace(/`/g, '\'');
-                      if (response.includes('\n')) {
-                        response = response.replace(/\n/g, '\\n');
-                        return `**${q.question}**\n${response}`;
-                      } else {
-                        return `**${q.question}**\n\`\`\`\n${response}\n\`\`\``;
-                      }
-                    }).join('\n\n');
-                  })(),
-                  inline: false
-                }
-              ]);
-            embedsToSend.push(formEmbed);
+          const hasResponses = formQuestions.some(q => {
+            const resp = responses[q.id];
+            return resp !== undefined && resp !== null && resp !== '' && resp !== 'No response';
+          });
+          const descriptionText = hasResponses ? 'Form Responses:' : '';
+          const formEmbed = new EmbedBuilder()
+            .setTitle('Ticket Information')
+            .setColor('#5865F2')
+            .addFields([
+              {
+                name: '\u200B',
+                value: (() => {
+                  if (formQuestions.length === 0) return '';
+                  return formQuestions.map(q => {
+                    let response = responses[q.id];
+                    if (response === undefined || response === null || response === '') {
+                      response = 'No response';
+                    }
+                    response = response.replace(/`/g, '\'');
+                    if (response.includes('\n')) {
+                      response = response.replace(/\n/g, '\\n');
+                      return `**${q.question}**\n${response}`;
+                    } else {
+                      return `**${q.question}**\n\`\`\`\n${response}\n\`\`\``;
+                    }
+                  }).join('\n\n');
+                })(),
+                inline: false
+              }
+            ]);
+          embedsToSend.push(formEmbed);
           }
 
           const closeButton = new ActionRowBuilder()

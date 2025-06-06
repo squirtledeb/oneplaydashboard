@@ -1,14 +1,9 @@
-/* Additional custom styles can be added here */
-.sidebar-transition {
-    transition: width 0.3s ease-in-out;
-}
+/* Add any existing styles here */
 
-.collapsible-menu {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-in-out;
-}
-
-.collapsible-menu.open {
-    max-height: 500px;
+/* Fix: Make ticket message font match rest of UI */
+#liveMessages {
+  font-family: inherit;
+  font-size: 1rem;
+  color: #1f2937; /* Tailwind gray-800 */
+  line-height: 1.5;
 }
