@@ -227,32 +227,107 @@ function renderDashboardContent() {
       </div>
     </div>
     <div class="mt-8">
-      <h2 class="text-xl font-bold mb-4 text-gray-800">Recent Ticket Activity</h2>
-      <div class="border rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead class="bg-gray-50">
-            <tr>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            ${ticketActivity.map(t => `
-              <tr>
-                <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
-                <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
-                </td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-gray-800">Recent Ticket Activity</h2>
+        <div class="relative" id="searchBarContainer" style="width: 480px;">
+          <input id="ticketSearchInput" type="text" placeholder="Search" class="w-full pl-4 pr-10 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200" onfocus="window.showSearchOptionsMenu()" onblur="window.hideSearchOptionsMenu()" oninput="window.handleTicketSearch(); window.toggleSearchIcon(); window.toggleSearchLayout();" onkeydown="window.handleSearchEnter(event)" autocomplete="off" />
+          <span id="searchIcon" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <span id="clearIcon" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer hidden" onclick="window.clearSearch()">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </span>
+          <div id="searchOptionsMenu" class="hidden absolute left-0 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4" style="min-width: 320px;">
+            <div class="text-gray-800 font-semibold mb-2">Search Options</div>
+            <div id="searchOptionsList" class="text-gray-600 text-sm space-y-1">
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="from" onmouseenter="window.highlightSearchOption('from')" onmouseleave="window.unhighlightSearchOption('from')" tabindex="0">
+                <span><span class="font-semibold">from:</span> user</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="mentions" onmouseenter="window.highlightSearchOption('mentions')" onmouseleave="window.unhighlightSearchOption('mentions')" tabindex="0">
+                <span><span class="font-semibold">mentions:</span> user</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="has" onmouseenter="window.highlightSearchOption('has')" onmouseleave="window.unhighlightSearchOption('has')" tabindex="0">
+                <span><span class="font-semibold">has:</span> link, embed or file</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="before" onmouseenter="window.highlightSearchOption('before')" onmouseleave="window.unhighlightSearchOption('before')" tabindex="0">
+                <span><span class="font-semibold">before:</span> specific date</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="during" onmouseenter="window.highlightSearchOption('during')" onmouseleave="window.unhighlightSearchOption('during')" tabindex="0">
+                <span><span class="font-semibold">during:</span> specific date</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="after" onmouseenter="window.highlightSearchOption('after')" onmouseleave="window.unhighlightSearchOption('after')" tabindex="0">
+                <span><span class="font-semibold">after:</span> specific date</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+              <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="pinned" onmouseenter="window.highlightSearchOption('pinned')" onmouseleave="window.unhighlightSearchOption('pinned')" tabindex="0">
+                <span><span class="font-semibold">pinned:</span> true or false</span>
+                <span class="plus-icon hidden text-lg font-bold text-gray-500">+</span>
+              </div>
+            </div>
+          </div>
+          <div id="searchResultsBox" class="hidden absolute left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-6" style="width: 480px; min-width: 320px; transition: width 0.2s; z-index: 30;">
+            <h3 class="text-lg font-semibold mb-4 text-gray-800">Search Results</h3>
+            <div id="searchResultsContent" class="text-gray-700">No results yet.</div>
+          </div>
+        </div>
+      </div>
+      <div id="ticketActivityFlex" class="w-full">
+        <div id="ticketActivityLayout" class="w-full" style="transition: width 0.2s, margin-top 0.2s;">
+          <div class="border rounded-lg overflow-hidden mt-0">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200" id="ticketActivityTableBody">
+                ${window.renderTicketActivityRows()}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   `;
 }
+
+window.handleTicketSearch = function() {
+  const input = document.getElementById('ticketSearchInput');
+  const value = input.value.trim().toLowerCase();
+  window.filteredTicketActivity = value
+    ? ticketActivity.filter(t =>
+        t.ticketNumber.toString().toLowerCase().includes(value) ||
+        (t.username && t.username.toLowerCase().includes(value))
+      )
+    : null;
+  window.renderTicketActivityTable();
+};
+
+window.renderTicketActivityRows = function() {
+  const data = window.filteredTicketActivity || ticketActivity;
+  return data.map(t => `
+    <tr>
+      <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
+      <td class="px-6 py-4 whitespace-nowrap">${t.username || 'Unknown'}</td>
+      <td class="px-6 py-4 whitespace-nowrap">
+        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${t.status === 'active' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">${t.status === 'active' ? 'Active' : (t.status === 'closed' ? 'Resolved' : t.status)}</span>
+      </td>
+    </tr>
+  `).join('');
+};
+
+window.renderTicketActivityTable = function() {
+  const tbody = document.getElementById('ticketActivityTableBody');
+  if (tbody) tbody.innerHTML = window.renderTicketActivityRows();
+};
+
 function renderIntegrationsContent() {
   return `
     <h1 class="text-2xl font-bold mb-6 text-gray-800">Integrations</h1>
@@ -1273,3 +1348,101 @@ window.addFormQuestion = addFormQuestion;
 window.removeFormQuestion = removeFormQuestion;
 window.updateFormQuestion = updateFormQuestion;
 window.formQuestions = formQuestions;
+
+window.showSearchOptionsMenu = function() {
+  setTimeout(() => {
+    const menu = document.getElementById('searchOptionsMenu');
+    if (menu) menu.classList.remove('hidden');
+  }, 50);
+};
+window.hideSearchOptionsMenu = function() {
+  setTimeout(() => {
+    const menu = document.getElementById('searchOptionsMenu');
+    if (menu) menu.classList.add('hidden');
+  }, 150);
+};
+
+window.highlightSearchOption = function(option) {
+  document.querySelectorAll('.search-option').forEach(el => {
+    if (el.getAttribute('data-option') === option) {
+      el.classList.add('bg-gray-200');
+      el.querySelector('.plus-icon').classList.remove('hidden');
+    } else {
+      el.classList.remove('bg-gray-200');
+      el.querySelector('.plus-icon').classList.add('hidden');
+    }
+  });
+};
+window.unhighlightSearchOption = function(option) {
+  document.querySelectorAll('.search-option').forEach(el => {
+    el.classList.remove('bg-gray-200');
+    el.querySelector('.plus-icon').classList.add('hidden');
+  });
+};
+
+window.handleSearchEnter = function(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    const input = document.getElementById('ticketSearchInput');
+    const value = input.value.trim();
+    if (!value) return;
+    const box = document.getElementById('searchResultsBox');
+    const content = document.getElementById('searchResultsContent');
+    if (box && content) {
+      box.classList.remove('hidden');
+      // For now, just show the query. You can replace this with actual search results.
+      content.textContent = `Results for: "${value}"`;
+    }
+  }
+};
+
+window.toggleSearchIcon = function() {
+  const input = document.getElementById('ticketSearchInput');
+  const searchIcon = document.getElementById('searchIcon');
+  const clearIcon = document.getElementById('clearIcon');
+  if (input && input.value.trim()) {
+    if (searchIcon) searchIcon.classList.add('hidden');
+    if (clearIcon) clearIcon.classList.remove('hidden');
+  } else {
+    if (searchIcon) searchIcon.classList.remove('hidden');
+    if (clearIcon) clearIcon.classList.add('hidden');
+    // Also hide search results if input is cleared
+    const box = document.getElementById('searchResultsBox');
+    if (box) box.classList.add('hidden');
+    window.filteredTicketActivity = null;
+    window.renderTicketActivityTable();
+  }
+};
+
+window.clearSearch = function() {
+  const input = document.getElementById('ticketSearchInput');
+  if (input) input.value = '';
+  window.toggleSearchIcon();
+  // Hide search results and reset table
+  const box = document.getElementById('searchResultsBox');
+  if (box) box.classList.add('hidden');
+  window.filteredTicketActivity = null;
+  window.renderTicketActivityTable();
+};
+
+window.toggleSearchLayout = function() {
+  const input = document.getElementById('ticketSearchInput');
+  const resultsBox = document.getElementById('searchResultsBox');
+  const searchBarContainer = document.getElementById('searchBarContainer');
+  const layout = document.getElementById('ticketActivityLayout');
+  if (input && input.value.trim()) {
+    if (resultsBox) resultsBox.classList.remove('hidden');
+    if (searchBarContainer) searchBarContainer.style.width = '480px';
+    if (layout) {
+      layout.style.width = '560px';
+      layout.style.marginTop = '0.5rem';
+    }
+  } else {
+    if (resultsBox) resultsBox.classList.add('hidden');
+    if (searchBarContainer) searchBarContainer.style.width = '';
+    if (layout) {
+      layout.style.width = '100%';
+      layout.style.marginTop = '';
+    }
+  }
+};
