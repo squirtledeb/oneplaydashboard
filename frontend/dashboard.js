@@ -23,6 +23,9 @@ let currentTicketLiveView = null; // New state: currently viewed ticket in live 
 let ticketMessages = {}; // Store messages per ticket for live view
 let formQuestions = []; // Store form questions
 let autoDisplayFormResults = false; // New state for auto display toggle
+let userTicketHistory = [];
+let userTicketHistoryUserId = null;
+let userTicketHistoryLoading = false;
 
 // Fix: Fetch auto display form results on page load to set checkbox state correctly
 window.fetchAutoDisplayFormResults = function() {
@@ -451,8 +454,9 @@ function renderBotSetup() {
 
 let selectedLoggingChannelId = '';
 
-function onLoggingChannelSelectChange(select) {
+window.onLoggingChannelSelectChange = function(select) {
   selectedLoggingChannelId = select.value;
+  console.log('Attempting to set log channel:', selectedLoggingChannelId, 'for guild:', connectedGuildId);
   // Save the logging channel setting via API
   if (!connectedGuildId) return;
   fetch(`${API_BASE}/api/logging-channel/${connectedGuildId}`, {
@@ -473,23 +477,29 @@ function onLoggingChannelSelectChange(select) {
 
 // Fetch current logging channel setting for the guild
 function fetchLoggingChannelForGuild(guildId) {
-  fetch(`${API_BASE}/api/logging-channel/${guildId}`)
+  return fetch(`${API_BASE}/api/logging-channel/${guildId}`)
     .then(res => res.json())
     .then(data => {
       selectedLoggingChannelId = data.channelId || '';
-      renderView();
     })
     .catch(err => {
       selectedLoggingChannelId = '';
-      renderView();
     });
 }
 
-// Modify fetchChannelsForGuild to also fetch logging channel setting
+// Modify fetchChannelsForGuild to also fetch logging channel setting and render after both are done
 const originalFetchChannelsForGuild = fetchChannelsForGuild;
 fetchChannelsForGuild = function(guildId) {
   originalFetchChannelsForGuild(guildId);
-  fetchLoggingChannelForGuild(guildId);
+  fetch(`${API_BASE}/api/channels/${guildId}`)
+    .then(res => res.json())
+    .then(channels => {
+      availableChannels = channels;
+      return fetchLoggingChannelForGuild(guildId);
+    })
+    .then(() => {
+      renderView();
+    });
 };
 
 function renderFormSetupView() {
@@ -777,18 +787,52 @@ function getSidebarContent() {
 function renderTicketLiveViewContent() {
   if (!currentTicketLiveView) return '<p>No ticket selected.</p>';
   const messages = ticketMessages[currentTicketLiveView] || [];
-  
-  // Find the ticket data to get form responses
   let formResponses = null;
+  let userId = null;
+  // Try to find the ticket in the main tickets array
   for (const ticket of tickets) {
     if (ticket.ticketNumber.toString().padStart(4, '0') === currentTicketLiveView) {
       formResponses = ticket.formResponses;
+      userId = ticket.userId;
       break;
     }
   }
-  
-  console.log('Rendering live ticket view for ticket:', currentTicketLiveView, 'with messages:', messages, 'and form responses:', formResponses);
-  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()', formResponses);
+  // If not found, look in userTicketHistory
+  if (!formResponses && userTicketHistory && userTicketHistory.length > 0) {
+    for (const ticket of userTicketHistory) {
+      if (ticket.ticketNumber.toString().padStart(4, '0') === currentTicketLiveView) {
+        formResponses = ticket.formResponses;
+        userId = ticket.userId;
+        break;
+      }
+    }
+  }
+  // Always fetch the full ticket history for the user when viewing any ticket
+  if (userId && (userTicketHistoryUserId !== userId || userTicketHistoryLoading)) {
+    userTicketHistoryLoading = true;
+    fetch(`${API_BASE}/api/user-tickets/${userId}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch user ticket history');
+        return res.json();
+      })
+      .then(data => {
+        userTicketHistory = data || [];
+        userTicketHistoryUserId = userId;
+        userTicketHistoryLoading = false;
+        renderView();
+      })
+      .catch(err => {
+        console.error('Failed to fetch user ticket history:', err);
+        userTicketHistory = [];
+        userTicketHistoryUserId = userId;
+        userTicketHistoryLoading = false;
+        renderView();
+      });
+    // Show loading state until fetched
+    return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()', formResponses, []);
+  }
+  // Always show all tickets for the user in userTicketHistory
+  return window.renderTicketLiveView(currentTicketLiveView, messages, 'window.closeTicketLiveView()', formResponses, userTicketHistory);
 }
 
 // Fetch ticket messages for live view
@@ -946,8 +990,13 @@ function setupWebSocket() {
           renderView();
         }
       } else if (data.type === 'TICKET_UPDATE') {
-        // Update or add ticket in tickets array
         const updatedTicket = data.ticket;
+        if (!updatedTicket) {
+          // Do not remove the ticket from the tickets array; just re-render to update UI
+          updateTicketDashboardStats();
+          renderView();
+          return;
+        }
         const index = tickets.findIndex(t => t.ticketNumber === updatedTicket.ticketNumber);
         if (index !== -1) {
           tickets[index] = updatedTicket;

@@ -8,7 +8,7 @@ const { PassThrough } = require('stream');
 require('dotenv').config();
 
 const mongoose = require('mongoose');
-const { FormQuestion, FormSettings, LoggingChannelSetting } = require('./models');
+const { FormQuestion, FormSettings, LoggingChannelSetting, Ticket } = require('./models');
 
 // Debug environment variables
 console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? 'Set' : 'Not set');
@@ -19,8 +19,12 @@ console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Set' : 'Not set');
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
-}).then(() => {
+}).then(async () => {
   console.log('Connected to MongoDB');
+  // Load initial data after MongoDB connection
+  await loadFormQuestions();
+  await loadFormSettings();
+  await loadLoggingChannelSettings();
 }).catch(err => {
   console.error('MongoDB connection error:', err);
 });
@@ -30,8 +34,25 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Cache formQuestions in memory for bot usage
-let formQuestions = [];
+// Initialize global variables
+let activeTickets = {};
+let formQuestions = {};
+let formSettings = {};
+let loggingChannelSettings = {};
+
+// Load logging channel settings
+async function loadLoggingChannelSettings() {
+  try {
+    const settings = await LoggingChannelSetting.find({});
+    console.log('Found logging channel settings:', settings);
+    settings.forEach(setting => {
+      loggingChannelSettings[setting.guildId] = setting.channelId;
+    });
+    console.log('Current loggingChannelSettings:', loggingChannelSettings);
+  } catch (error) {
+    console.error('Error loading logging channel settings:', error);
+  }
+}
 
 // Load form questions from DB on startup
 async function loadFormQuestions() {
@@ -125,17 +146,28 @@ app.get('/api/logging-channel/:guildId', async (req, res) => {
 app.post('/api/logging-channel/:guildId', async (req, res) => {
   const { guildId } = req.params;
   const { channelId } = req.body;
+  console.log('Setting logging channel:', { guildId, channelId });
+  
   if (typeof channelId !== 'string') {
     return res.status(400).json({ error: 'Invalid channelId' });
   }
   try {
     let setting = await LoggingChannelSetting.findOne({ guildId });
+    console.log('Existing setting:', setting);
+    
     if (!setting) {
       setting = new LoggingChannelSetting({ guildId, channelId });
+      console.log('Created new setting:', setting);
     } else {
       setting.channelId = channelId;
+      console.log('Updated existing setting:', setting);
     }
     await setting.save();
+    console.log(`Logging channel set for guild ${guildId}: ${channelId}`);
+    // Update in-memory settings
+    loggingChannelSettings[guildId] = channelId;
+    console.log('Updated in-memory settings:', loggingChannelSettings);
+    
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving logging channel setting:', error);
@@ -148,7 +180,6 @@ const wss = new WebSocket.Server({ port: 4001 });
 
 // Keep track of connected clients
 const clients = new Set();
-let activeTickets = {};
 
 // Initialize Discord bot
 const { Client, GatewayIntentBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -219,39 +250,31 @@ app.get('/api/categories/:guildId', (req, res) => {
 
 app.get('/api/tickets/:guildId', async (req, res) => {
   const { guildId } = req.params;
-  const tickets = [];
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) {
-    return res.status(404).json({ error: 'Guild not found' });
+  try {
+    const tickets = await Ticket.find({ guildId }).lean();
+    res.json(tickets);
+  } catch (error) {
+    console.error('Error fetching tickets from MongoDB:', error);
+    res.status(500).json([]);
   }
-  if (activeTickets[guildId]) {
-    for (const ticketNumber in activeTickets[guildId]) {
-      const ticket = activeTickets[guildId][ticketNumber];
-      let member = guild.members.cache.get(ticket.userId);
-      if (!member) {
-        try {
-          member = await guild.members.fetch(ticket.userId);
-        } catch (e) {
-          member = null;
-        }
-      }
-      const username = member ? (member.user.tag || member.user.username) : 'Unknown';
-      tickets.push({
-        ...ticket,
-        username
-      });
-    }
-  }
-  res.json(tickets);
 });
 
-app.get('/api/ticket-messages/:ticketNumber', (req, res) => {
+app.get('/api/ticket-messages/:ticketNumber', async (req, res) => {
   const { ticketNumber } = req.params;
   let messages = [];
+  let found = false;
   for (const guildId in activeTickets) {
     if (activeTickets[guildId][ticketNumber]) {
       messages = activeTickets[guildId][ticketNumber].messages || [];
+      found = true;
       break;
+    }
+  }
+  if (!found) {
+    // Fallback: fetch from MongoDB
+    const ticket = await Ticket.findOne({ ticketNumber });
+    if (ticket && ticket.messages) {
+      messages = ticket.messages;
     }
   }
   res.json(messages);
@@ -364,9 +387,6 @@ function broadcastUpdate(data) {
   });
 }
 
-// Cache formSettings in memory for bot usage
-let formSettings = { autoDisplayFormResults: false };
-
 // Load form settings from DB on startup
 async function loadFormSettings() {
   try {
@@ -383,8 +403,12 @@ async function loadFormSettings() {
 loadFormSettings();
 
 // Bot startup
-client.once('ready', () => {
-  console.log('Discord bot is ready!');
+client.once('ready', async () => {
+  console.log(`Logged in as ${client.user.tag}!`);
+  await loadFormQuestions();
+  await loadFormSettings();
+  await loadLoggingChannelSettings();
+  console.log('Bot is ready!');
   connectedGuilds = client.guilds.cache.map(guild => ({
     id: guild.id,
     name: guild.name
@@ -623,6 +647,19 @@ client.on('interactionCreate', async (interaction) => {
             ticketNumber: ticketNumber,
             ticket: ticketWithUsername
           });
+
+          // Save ticket to MongoDB
+          await Ticket.create({
+            userId,
+            username,
+            ticketNumber,
+            status: 'active',
+            guildId,
+            channelId: channel.id,
+            createdAt: new Date(),
+            formResponses: responses,
+            messages: []
+          });
         } catch (error) {
           console.error('Error creating ticket:', error);
           if (error.stack) {
@@ -828,6 +865,12 @@ client.on('interactionCreate', async (interaction) => {
             } catch (err) {
               console.error('Error deleting ephemeral confirmation message:', err);
             }
+
+            // Always update ticket status in MongoDB, even if no messages
+            await Ticket.findOneAndUpdate(
+              { guildId, ticketNumber },
+              { status: 'closed', closedAt: new Date() }
+            );
           } else {
             await interaction.update({
               content: 'Unable to find ticket information. Please close it manually.',
@@ -1025,6 +1068,7 @@ client.on('interactionCreate', async (interaction) => {
                 ticketNumber,
                 ticket: null
               });
+
             } catch (error) {
               console.error('Error deleting ticket channel:', error);
             }
@@ -1095,6 +1139,11 @@ client.on('messageCreate', async (message) => {
       activeTickets[guildId][ticketNumber].messages = [];
     }
     activeTickets[guildId][ticketNumber].messages.push(ticketMessage);
+    // Persist messages to MongoDB
+    await Ticket.findOneAndUpdate(
+      { guildId, ticketNumber },
+      { $push: { messages: ticketMessage } }
+    );
 
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
@@ -1155,6 +1204,11 @@ async function handleAIReply(guildId, ticketNumber, userMessage) {
       messageId: sentMessage.id
     };
     activeTickets[guildId][ticketNumber].messages.push(aiMessage);
+    // Persist AI/bot message to MongoDB
+    await Ticket.findOneAndUpdate(
+      { guildId, ticketNumber },
+      { $push: { messages: aiMessage } }
+    );
 
     broadcastUpdate({
       type: 'TICKET_MESSAGE',
@@ -1202,4 +1256,15 @@ app.listen(PORT, () => {
 // Login to Discord
 client.login(TOKEN).catch(error => {
   console.error('Error logging in to Discord:', error);
+});
+
+// --- API: Get all tickets for a user ---
+app.get('/api/user-tickets/:userId', async (req, res) => {
+  try {
+    const tickets = await Ticket.find({ userId: req.params.userId }).lean();
+    console.log(`[User Ticket History] userId: ${req.params.userId}, tickets found: ${tickets.length}`);
+    res.json(tickets);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch user tickets' });
+  }
 });

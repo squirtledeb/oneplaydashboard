@@ -19,12 +19,27 @@ const loggingChannelSettingsSchema = new mongoose.Schema({
   channelId: { type: String, required: true }
 });
 
+const ticketSchema = new mongoose.Schema({
+  userId: { type: String, required: true },
+  username: { type: String, required: false },
+  ticketNumber: { type: String, required: true },
+  status: { type: String, required: true }, // active, closed, resolved, etc.
+  guildId: { type: String, required: true },
+  channelId: { type: String, required: true },
+  createdAt: { type: Date, required: true },
+  closedAt: { type: Date },
+  formResponses: { type: Object, default: {} },
+  messages: { type: Array, default: [] }
+});
+
 const FormQuestion = mongoose.model('FormQuestion', formQuestionSchema);
 const FormSettings = mongoose.model('FormSettings', formSettingsSchema);
 const LoggingChannelSetting = mongoose.model('LoggingChannelSetting', loggingChannelSettingsSchema);
+const Ticket = mongoose.model('Ticket', ticketSchema);
 
 module.exports = {
   FormQuestion,
   FormSettings,
-  LoggingChannelSetting
+  LoggingChannelSetting,
+  Ticket
 };
