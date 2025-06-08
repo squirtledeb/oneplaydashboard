@@ -230,14 +230,14 @@ function renderDashboardContent() {
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-xl font-bold text-gray-800">Recent Ticket Activity</h2>
         <div class="relative" id="searchBarContainer" style="width: 480px;">
-          <input id="ticketSearchInput" type="text" placeholder="Search" class="w-full pl-4 pr-10 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200" onfocus="window.showSearchOptionsMenu()" onblur="window.hideSearchOptionsMenu()" oninput="window.handleTicketSearch(); window.toggleSearchIcon(); window.toggleSearchLayout();" onkeydown="window.handleSearchEnter(event)" autocomplete="off" />
+          <input id="ticketSearchInput" type="text" placeholder="Search" class="w-full pl-4 pr-10 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200" onfocus="window.showSearchOptionsMenu(); window.toggleSearchLayout();" onblur="window.hideSearchOptionsMenu()" oninput="window.handleTicketSearch(); window.toggleSearchIcon(); window.toggleSearchLayout();" onkeydown="window.handleSearchEnter(event)" autocomplete="off" />
           <span id="searchIcon" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <span id="clearIcon" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 cursor-pointer hidden" onclick="window.clearSearch()">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </span>
-          <div id="searchOptionsMenu" class="hidden absolute left-0 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4" style="min-width: 320px;">
+          <div id="searchOptionsMenu" class="hidden absolute left-0 top-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4" style="width: 100%; max-width: 100vw;">
             <div class="text-gray-800 font-semibold mb-2">Search Options</div>
             <div id="searchOptionsList" class="text-gray-600 text-sm space-y-1">
               <div class="search-option flex items-center justify-between px-2 py-2 rounded cursor-pointer" data-option="from" onmouseenter="window.highlightSearchOption('from')" onmouseleave="window.unhighlightSearchOption('from')" tabindex="0">
@@ -270,27 +270,30 @@ function renderDashboardContent() {
               </div>
             </div>
           </div>
-          <div id="searchResultsBox" class="hidden absolute left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg p-6" style="width: 480px; min-width: 320px; transition: width 0.2s; z-index: 30;">
-            <h3 class="text-lg font-semibold mb-4 text-gray-800">Search Results</h3>
-            <div id="searchResultsContent" class="text-gray-700">No results yet.</div>
-          </div>
         </div>
       </div>
-      <div id="ticketActivityFlex" class="w-full">
-        <div id="ticketActivityLayout" class="w-full" style="transition: width 0.2s, margin-top 0.2s;">
-          <div class="border rounded-lg overflow-hidden mt-0">
-            <table class="min-w-full divide-y divide-gray-200">
-              <thead class="bg-gray-50">
-                <tr>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                  <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody class="bg-white divide-y divide-gray-200" id="ticketActivityTableBody">
-                ${window.renderTicketActivityRows()}
-              </tbody>
-            </table>
+      <div class="flex flex-row items-start gap-8" id="activityAndSearchFlex" style="position: relative; width: 100%;">
+        <div id="ticketActivityFlex" class="transition-all duration-200" style="flex: 1 1 0%; min-width: 420px;">
+          <div id="ticketActivityLayout" class="w-full" style="transition: width 0.2s, margin-top 0.2s;">
+            <div class="border rounded-lg overflow-hidden mt-0">
+              <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="ticketActivityTableBody">
+                  ${window.renderTicketActivityRows()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="searchResultsFlex" class="transition-all duration-200" style="display: none; width: 480px; min-width: 320px;">
+          <div id="searchResultsBox" class="bg-[#23272a] border border-[#36393f] rounded-lg shadow-lg p-6" style="width: 100%; min-width: 320px; transition: width 0.2s; z-index: 30; display: none; max-height: 55vh; overflow-y: auto;">
+            <div id="searchResultsContent" class="text-gray-200">No results yet.</div>
           </div>
         </div>
       </div>
@@ -299,19 +302,21 @@ function renderDashboardContent() {
 }
 
 window.handleTicketSearch = function() {
-  const input = document.getElementById('ticketSearchInput');
-  const value = input.value.trim().toLowerCase();
-  window.filteredTicketActivity = value
-    ? ticketActivity.filter(t =>
-        t.ticketNumber.toString().toLowerCase().includes(value) ||
-        (t.username && t.username.toLowerCase().includes(value))
-      )
-    : null;
-  window.renderTicketActivityTable();
+  // Do not filter ticket activity table based on search input
+  // const input = document.getElementById('ticketSearchInput');
+  // const value = input.value.trim().toLowerCase();
+  // window.filteredTicketActivity = value
+  //   ? ticketActivity.filter(t =>
+  //       t.ticketNumber.toString().toLowerCase().includes(value) ||
+  //       (t.username && t.username.toLowerCase().includes(value))
+  //     )
+  //   : null;
+  // window.renderTicketActivityTable();
 };
 
 window.renderTicketActivityRows = function() {
-  const data = window.filteredTicketActivity || ticketActivity;
+  // Always use the full ticketActivity array, never filtered
+  const data = ticketActivity;
   return data.map(t => `
     <tr>
       <td class="px-6 py-4 whitespace-nowrap">#${t.ticketNumber}</td>
@@ -1386,14 +1391,118 @@ window.handleSearchEnter = function(event) {
     const input = document.getElementById('ticketSearchInput');
     const value = input.value.trim();
     if (!value) return;
-    const box = document.getElementById('searchResultsBox');
-    const content = document.getElementById('searchResultsContent');
-    if (box && content) {
-      box.classList.remove('hidden');
-      // For now, just show the query. You can replace this with actual search results.
-      content.textContent = `Results for: "${value}"`;
-    }
+    window.performTicketSearch(value);
   }
+};
+
+window.performTicketSearch = async function(query) {
+  const box = document.getElementById('searchResultsBox');
+  const content = document.getElementById('searchResultsContent');
+  if (box && content) {
+    box.classList.remove('hidden');
+    content.innerHTML = '<div class="text-gray-500">Searching...</div>';
+    // Search tickets and messages
+    const lowerQuery = query.toLowerCase();
+    // Fetch all tickets if not already loaded
+    let allTickets = window.tickets || [];
+    if (!allTickets.length) {
+      try {
+        const res = await fetch(`${API_BASE}/api/tickets/${connectedGuildId}`);
+        allTickets = await res.json();
+      } catch (e) { allTickets = []; }
+    }
+    // For each ticket, fetch messages if not already present
+    const results = [];
+    for (const ticket of allTickets) {
+      // Search in ticket number, username, and category
+      const category = ticket.categoryName || ticket.category || 'Support Tickets Open';
+      const username = ticket.username || 'Unknown';
+      const ticketNumber = ticket.ticketNumber.toString().padStart(4, '0');
+      let found = false;
+      let matchedMessages = [];
+      // Search in ticket number, username, category
+      if (
+        ticketNumber.includes(lowerQuery) ||
+        username.toLowerCase().includes(lowerQuery) ||
+        category.toLowerCase().includes(lowerQuery)
+      ) {
+        found = true;
+      }
+      // Search in messages
+      let messages = ticket.messages || [];
+      if (!messages.length) {
+        try {
+          const res = await fetch(`${API_BASE}/api/ticket-messages/${ticketNumber}`);
+          messages = await res.json();
+        } catch (e) { messages = []; }
+      }
+      matchedMessages = messages.filter(m => m.content && m.content.toLowerCase().includes(lowerQuery));
+      if (matchedMessages.length > 0) found = true;
+      if (found) {
+        results.push({ ticket, matchedMessages, category, username, ticketNumber });
+      }
+    }
+    if (results.length === 0) {
+      content.innerHTML = '<div class="text-gray-500">No results found.</div>';
+      return;
+    }
+    // Flatten results so each matched message is its own card
+    const flatResults = [];
+    results.forEach(r => {
+      if (r.matchedMessages.length > 0) {
+        r.matchedMessages.forEach(m => {
+          flatResults.push({
+            ticket: r.ticket,
+            ticketNumber: r.ticketNumber,
+            category: r.category,
+            username: r.username,
+            message: m
+          });
+        });
+      } else {
+        // If no matched messages, still show a card for the ticket
+        flatResults.push({
+          ticket: r.ticket,
+          ticketNumber: r.ticketNumber,
+          category: r.category,
+          username: r.username,
+          message: null
+        });
+      }
+    });
+    // Add results count label
+    const resultsLabel = `<div class="mb-4 text-lg font-semibold" style="color: #111;">${flatResults.length} result${flatResults.length !== 1 ? 's' : ''} found for "${query}"</div>`;
+    content.innerHTML = resultsLabel + `<div class="search-results-list flex flex-col gap-6">` + flatResults.map(item => {
+      const avatarUrl = 'https://cdn.discordapp.com/embed/avatars/0.png';
+      return `
+        <div class="search-result-item card-clickable rounded-lg flex flex-col shadow-lg" style="background: #23272a; border: 1px solid #23272a; position: static; padding: 1.25rem;" tabindex="0" onclick="window.openTicketLiveView('${item.ticketNumber}')">
+          <div class="flex items-center justify-between" style="margin-bottom: 0; font-size: 0.875rem; font-weight: bold;">
+            <div class="flex items-center gap-2">
+              <a class="ticket-link font-bold" style="font-size: 0.875rem; font-weight: bold;" onclick="event.stopPropagation(); window.openTicketLiveView('${item.ticketNumber}')">#ticket-${item.ticketNumber}</a>
+              <span class="ml-2 px-2 py-1 rounded" style="background: #23272a; color: #fff; font-size: 0.875rem; font-weight: bold;">${item.category}</span>
+            </div>
+            <button class="jump-btn hover:bg-[#5865f2] text-white px-3 py-1 rounded transition font-bold" style="background: #23272a; font-size: 0.875rem; font-weight: bold;" onclick="event.stopPropagation(); window.openTicketLiveView('${item.ticketNumber}')">Jump</button>
+          </div>
+          <div class="flex items-start gap-3 bg-[#2b2d31] rounded-md p-3">
+            <img src="${avatarUrl}" alt="avatar" class="w-8 h-8 rounded-full mt-1" />
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="font-semibold text-[#00b0f4]">${item.username}</span>
+                <span class="text-xs text-gray-400">${item.message && item.message.timestamp ? new Date(item.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+              </div>
+              <div class="text-gray-200 text-sm">${item.message ? window.highlightQuery(item.message.content, query) : '<span class="text-gray-400">No matching messages in this ticket.</span>'}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('') + `</div>`;
+  }
+};
+
+window.highlightQuery = function(text, query) {
+  if (!query) return text;
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(re, '<span class="bg-yellow-900 text-white px-1 rounded">$1</span>');
 };
 
 window.toggleSearchIcon = function() {
@@ -1427,22 +1536,138 @@ window.clearSearch = function() {
 
 window.toggleSearchLayout = function() {
   const input = document.getElementById('ticketSearchInput');
-  const resultsBox = document.getElementById('searchResultsBox');
   const searchBarContainer = document.getElementById('searchBarContainer');
-  const layout = document.getElementById('ticketActivityLayout');
+  const activityFlex = document.getElementById('ticketActivityFlex');
+  const searchResultsFlex = document.getElementById('searchResultsFlex');
+  const resultsBox = document.getElementById('searchResultsBox');
   if (input && input.value.trim()) {
-    if (resultsBox) resultsBox.classList.remove('hidden');
     if (searchBarContainer) searchBarContainer.style.width = '480px';
-    if (layout) {
-      layout.style.width = '560px';
-      layout.style.marginTop = '0.5rem';
+    if (activityFlex) activityFlex.style.flex = '1 1 0%';
+    if (searchResultsFlex) {
+      searchResultsFlex.style.display = 'block';
+      searchResultsFlex.style.width = '480px';
+      searchResultsFlex.style.minWidth = '320px';
     }
+    if (resultsBox) resultsBox.style.display = 'block';
   } else {
-    if (resultsBox) resultsBox.classList.add('hidden');
     if (searchBarContainer) searchBarContainer.style.width = '';
-    if (layout) {
-      layout.style.width = '100%';
-      layout.style.marginTop = '';
+    if (activityFlex) activityFlex.style.flex = '1 1 0%';
+    if (searchResultsFlex) {
+      searchResultsFlex.style.display = 'none';
+      searchResultsFlex.style.width = '0';
+      searchResultsFlex.style.minWidth = '0';
     }
+    if (resultsBox) resultsBox.style.display = 'none';
   }
 };
+
+// Add this style block at the top of the file or inject it if not present
+if (!document.getElementById('search-result-jump-style')) {
+  const style = document.createElement('style');
+  style.id = 'search-result-jump-style';
+  style.innerHTML = `
+    .search-result-item .jump-btn { display: none; }
+    .search-result-item:hover .jump-btn, .search-result-item:focus-within .jump-btn { display: inline-block; }
+  `;
+  document.head.appendChild(style);
+}
+// ... existing code ...
+// Add CSS for ticket number hyperlink underline on hover/focus
+if (!document.getElementById('ticket-link-style')) {
+  const style = document.createElement('style');
+  style.id = 'ticket-link-style';
+  style.innerHTML = `
+    .ticket-link {
+      color: #fff;
+      text-decoration: none;
+      cursor: pointer;
+      transition: text-decoration 0.15s;
+    }
+    .ticket-link:hover, .ticket-link:focus {
+      text-decoration: underline;
+    }
+    .search-result-item.card-clickable {
+      cursor: pointer;
+    }
+  `;
+  document.head.appendChild(style);
+}
+// ... existing code ...
+
+// Auto-close Quick Options collapsible sidebar when search bar is interacted with
+function setupSearchBarSidebarAutoClose() {
+  const searchInput = document.getElementById('ticketSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('focus', function() {
+      if (isCollapsibleOpen) {
+        isCollapsibleOpen = false;
+        renderView();
+      }
+    });
+    searchInput.addEventListener('input', function() {
+      if (isCollapsibleOpen) {
+        isCollapsibleOpen = false;
+        renderView();
+      }
+    });
+  }
+}
+// Call this after renderView
+const origRenderView = renderView;
+renderView = function() {
+  origRenderView();
+  setupSearchBarSidebarAutoClose();
+};
+
+// Inject global styles for transitions and animations if not present
+if (!document.getElementById('dashboard-animations-style')) {
+  const style = document.createElement('style');
+  style.id = 'dashboard-animations-style';
+  style.innerHTML = `
+    /* Fade and slide for search results box */
+    #searchResultsBox {
+      opacity: 0;
+      transform: translateY(16px) scale(0.98);
+      pointer-events: none;
+      transition: opacity 0.3s cubic-bezier(.4,0,.2,1), transform 0.3s cubic-bezier(.4,0,.2,1);
+    }
+    #searchResultsBox[style*='display: block'] {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+    /* Fade and slide for search options dropdown */
+    #searchOptionsMenu {
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 0.25s cubic-bezier(.4,0,.2,1), transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+    #searchOptionsMenu:not(.hidden) {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    /* Smooth width/height transitions for flex containers */
+    #ticketActivityFlex, #searchResultsFlex {
+      transition: width 0.3s cubic-bezier(.4,0,.2,1), flex 0.3s cubic-bezier(.4,0,.2,1), margin 0.3s cubic-bezier(.4,0,.2,1);
+    }
+    /* Button hover/active transitions */
+    .jump-btn, .hover\:bg-\[\#5865f2\] {
+      transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.15s;
+    }
+    .jump-btn:hover, .hover\:bg-\[\#5865f2\]:hover {
+      transform: scale(1.05);
+      box-shadow: 0 2px 8px 0 rgba(80,100,255,0.10);
+    }
+    /* Card hover effect */
+    .search-result-item {
+      transition: box-shadow 0.25s, transform 0.25s;
+    }
+    .search-result-item:hover {
+      box-shadow: 0 8px 32px 0 rgba(0,0,0,0.18);
+      transform: translateY(-2px) scale(1.01);
+    }
+  `;
+  document.head.appendChild(style);
+}
